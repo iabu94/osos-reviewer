@@ -28,19 +28,27 @@ describe("runClaudeReview", () => {
     await chmod(slowCli, 0o755);
   });
 
-  it("invokes CLI with -p and returns stdout", async () => {
+  it("invokes CLI with -p, restricted tools, and prompt on stdin", async () => {
     const result = await runClaudeReview({
-      prompt: "review this",
+      prompt: "review this UNIQUE_PROMPT",
       claudeCliPath: okCli,
       mcpServerCommand: "echo",
       mcpServerArgs: ["mcp"],
       timeoutMs: 5_000,
+      cwd: binDir,
+      addDirs: [binDir],
     });
     expect(result.exitCode).toBe(0);
     expect(result.timedOut).toBe(false);
     expect(result.stdout).toContain('{"ok":true}');
     const argv = await readFile(argvFile, "utf8");
     expect(argv).toContain("-p");
+    expect(argv).toContain("--strict-mcp-config");
+    expect(argv).toContain("--allowedTools");
+    expect(argv).toContain("mcp__review__trace_fe_be_integration");
+    expect(argv).toContain("--disallowedTools");
+    expect(argv).not.toContain("UNIQUE_PROMPT");
+    expect(argv).toContain("--add-dir");
   });
 
   it("sets timedOut when CLI exceeds timeout", async () => {

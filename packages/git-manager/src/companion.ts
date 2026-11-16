@@ -12,6 +12,14 @@ export function extractTicketId(
   return match ? match[0] : null;
 }
 
+/** True when ticket appears as a path segment boundary (not a prefix of a longer id). */
+function branchContainsTicket(branch: string, ticketId: string): boolean {
+  const escaped = ticketId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // no alphanumeric before; no digit after (so ABC-12 does not match ABC-123)
+  const re = new RegExp(`(^|[^A-Za-z0-9])${escaped}(?!\\d)`);
+  return re.test(branch);
+}
+
 export function resolveCompanionBranch(input: {
   branches: string[];
   ticketId: string | null;
@@ -22,7 +30,8 @@ export function resolveCompanionBranch(input: {
   }
 
   const matches = input.branches
-    .filter((b) => b.includes(input.ticketId!))
+    .filter((b) => b.startsWith("origin/") && !b.includes(" -> "))
+    .filter((b) => branchContainsTicket(b, input.ticketId!))
     .sort((a, b) => a.localeCompare(b));
 
   if (matches.length === 0) {

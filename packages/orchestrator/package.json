@@ -16,7 +16,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "start": "tsx src/cli.ts"
+    "start": "tsx --env-file=../../.env src/cli.ts"
   },
   "dependencies": {
     "@review/db": "workspace:*",

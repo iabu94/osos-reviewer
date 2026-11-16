@@ -36,6 +36,8 @@ export interface ReviewMetadata {
   companionReason: string;
   worktrees: string[];
   diffChars: number;
+  primaryHeadSha?: string;
+  companionHeadSha?: string;
 }
 
 export interface ReviewResult {

@@ -33,11 +33,11 @@ Later phases add document RAG, AST code intelligence, real MCP tools, and Micros
 
 ```bash
 pnpm install
-cp .env.example .env
+cp .env.example .env   # edit REPOS_JSON / paths; REPOS_JSON is single-quoted JSON
 docker compose up -d
 ```
 
-Postgres is published on **host port 5433** (avoids clashing with a local Postgres on 5432).
+The orchestrator CLI loads `.env` via `tsx --env-file=../../.env`. Postgres is published on **host port 5433** (avoids clashing with a local Postgres on 5432).
 
 ## Test
 

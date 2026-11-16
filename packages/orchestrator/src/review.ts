@@ -1,4 +1,4 @@
-import { rm } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
   TicketUnresolvedError,
@@ -17,6 +17,8 @@ import {
 } from "@review/git-manager";
 import { createPool, healthCheck, migrate } from "@review/db";
 import { runClaudeReview } from "./claude.js";
+
+const REVIEW_ID_RE = /^[A-Za-z0-9_-]+$/;
 
 export type PrBranches = {
   primaryBranch: string;
@@ -92,6 +94,8 @@ function buildPrompt(input: {
   request: ReviewRequest;
   metadata: ReviewMetadata;
   diff: string;
+  primaryWorktree: string;
+  companionWorktree: string;
 }): string {
   return [
     "You are performing a read-only code review. Do not modify files, commit, push, or merge.",
@@ -99,8 +103,11 @@ function buildPrompt(input: {
     "",
     `Review ID: ${input.request.reviewId}`,
     `PR URL: ${input.request.prUrl}`,
+    `Primary worktree: ${input.primaryWorktree}`,
+    `Companion worktree: ${input.companionWorktree}`,
     `Primary repo: ${input.metadata.primaryRepoId}`,
     `Primary branch: ${input.metadata.primaryBranch}`,
+    `Primary HEAD: ${input.metadata.primaryHeadSha ?? "unknown"}`,
     `Target branch: ${input.metadata.targetBranch}`,
     `Ticket: ${input.metadata.ticketId}`,
     `Companion: ${input.metadata.companionRepoId} @ ${input.metadata.companionBranch} (fallback=${input.metadata.companionUsedFallback}, reason=${input.metadata.companionReason})`,
@@ -116,18 +123,52 @@ export async function runReview(
 ): Promise<ReviewResult> {
   const worktrees: string[] = [];
   const created: Array<{ repoPath: string; worktreePath: string }> = [];
+  let claimedReviewDir: string | null = null;
 
   const cleanup = async () => {
     for (const wt of created) {
-      await removeWorktree(wt);
+      try {
+        await removeWorktree(wt);
+      } catch {
+        // best-effort
+      }
     }
-    await rm(join(deps.config.worktreeRoot, request.reviewId), {
-      recursive: true,
-      force: true,
-    });
+    if (claimedReviewDir) {
+      try {
+        await rm(claimedReviewDir, { recursive: true, force: true });
+      } catch {
+        // best-effort
+      }
+    }
   };
 
   try {
+    if (!REVIEW_ID_RE.test(request.reviewId)) {
+      return {
+        reviewId: request.reviewId,
+        status: "failed",
+        error: {
+          code: "invalid_review_id",
+          message: "reviewId must match ^[A-Za-z0-9_-]+$",
+        },
+      };
+    }
+
+    const reviewDir = join(deps.config.worktreeRoot, request.reviewId);
+    try {
+      await mkdir(reviewDir, { recursive: false });
+      claimedReviewDir = reviewDir;
+    } catch {
+      return {
+        reviewId: request.reviewId,
+        status: "failed",
+        error: {
+          code: "review_id_in_use",
+          message: `Review directory already exists: ${reviewDir}`,
+        },
+      };
+    }
+
     if (deps.requireDb) {
       const check = deps.dbHealth ?? defaultDbHealth;
       const health = await check(deps.config.databaseUrl);
@@ -201,16 +242,12 @@ export async function runReview(
     });
     worktrees.push(primaryWt.worktreePath);
 
-    const companionBranchLocal = companionResolution.branch.replace(
-      /^origin\//,
-      "",
-    );
     const companionWt = await createWorktree({
       repoPath: companion.localPath,
       worktreeRoot: deps.config.worktreeRoot,
       reviewId: request.reviewId,
       repoId: companion.id,
-      branch: companionBranchLocal,
+      branch: companionResolution.branch,
     });
     created.push({
       repoPath: companion.localPath,
@@ -234,9 +271,17 @@ export async function runReview(
       companionReason: companionResolution.reason,
       worktrees: [...worktrees],
       diffChars: diff.length,
+      primaryHeadSha: primaryWt.headSha,
+      companionHeadSha: companionWt.headSha,
     };
 
-    const prompt = buildPrompt({ request, metadata, diff });
+    const prompt = buildPrompt({
+      request,
+      metadata,
+      diff,
+      primaryWorktree: primaryWt.worktreePath,
+      companionWorktree: companionWt.worktreePath,
+    });
     const runClaude = deps.runClaude ?? runClaudeReview;
     const claude = await runClaude({
       prompt,
@@ -244,6 +289,8 @@ export async function runReview(
       mcpServerCommand: deps.mcpServerCommand,
       mcpServerArgs: deps.mcpServerArgs,
       timeoutMs: deps.config.reviewTimeoutMs,
+      cwd: primaryWt.worktreePath,
+      addDirs: [companionWt.worktreePath],
     });
 
     if (claude.timedOut) {
@@ -251,9 +298,10 @@ export async function runReview(
         reviewId: request.reviewId,
         status: "failed",
         metadata,
+        claudeStdout: claude.stdout,
         error: {
           code: "claude_timeout",
-          message: "Claude Code review timed out",
+          message: claude.stderr || "Claude Code review timed out",
         },
       };
     }
@@ -291,6 +339,10 @@ export async function runReview(
       error: { code, message },
     };
   } finally {
-    await cleanup();
+    try {
+      await cleanup();
+    } catch {
+      // never throw from finally
+    }
   }
 }

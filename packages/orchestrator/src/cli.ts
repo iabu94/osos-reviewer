@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { execa } from "execa";
 import { loadConfig } from "@review/shared";
 import { runReview } from "./review.js";
@@ -33,14 +33,18 @@ async function main() {
   if (!args["pr-url"]) usage();
 
   const config = loadConfig(process.env);
-  const reviewId = args["review-id"] ?? randomUUID();
+  const reviewId = args["review-id"] ?? randomUUID().replace(/-/g, "");
   const primaryBranch = args["primary-branch"] ?? "HEAD";
   const targetBranch = args["target-branch"] ?? "develop";
   const headRef = args["primary-branch"] ?? primaryBranch;
 
-  const mcpEntry = join(
+  const mcpEntry = resolve(
     dirname(fileURLToPath(import.meta.url)),
     "../../mcp-server/src/index.ts",
+  );
+  const tsxBin = resolve(
+    dirname(fileURLToPath(import.meta.url)),
+    "../../../node_modules/.bin/tsx",
   );
 
   const result = await runReview(
@@ -49,8 +53,8 @@ async function main() {
       config,
       requireDb: process.env.REQUIRE_DB === "true",
       claudeCliPath: config.claudeCliPath,
-      mcpServerCommand: "pnpm",
-      mcpServerArgs: ["exec", "tsx", mcpEntry],
+      mcpServerCommand: tsxBin,
+      mcpServerArgs: [mcpEntry],
       getPrBranches: async () => ({
         primaryBranch,
         targetBranch,

@@ -4,10 +4,17 @@ import { join } from "node:path";
 import { execa } from "execa";
 
 const ALLOWED_TOOLS = [
-  "trace_fe_be_integration",
-  "trace_symbol_impact",
-  "check_reusability",
-  "get_coding_standards",
+  "mcp__review__trace_fe_be_integration",
+  "mcp__review__trace_symbol_impact",
+  "mcp__review__check_reusability",
+  "mcp__review__get_coding_standards",
+] as const;
+
+const DISALLOWED_TOOLS = [
+  "Edit",
+  "Write",
+  "Bash",
+  "NotebookEdit",
 ] as const;
 
 export async function runClaudeReview(opts: {
@@ -17,6 +24,8 @@ export async function runClaudeReview(opts: {
   mcpServerArgs: string[];
   timeoutMs: number;
   env?: NodeJS.ProcessEnv;
+  cwd?: string;
+  addDirs?: string[];
 }): Promise<{
   exitCode: number;
   stdout: string;
@@ -25,7 +34,9 @@ export async function runClaudeReview(opts: {
 }> {
   const configDir = await mkdtemp(join(tmpdir(), "review-claude-"));
   try {
-    // Flags: headless print mode. --output-format json when supported by installed CLI.
+    // Verified against Claude CLI help: --mcp-config loads servers only;
+    // tool allow/deny must use --allowedTools / --disallowedTools; --strict-mcp-config
+    // prevents loading the operator's other MCP servers.
     const mcpConfig = {
       mcpServers: {
         review: {
@@ -33,31 +44,35 @@ export async function runClaudeReview(opts: {
           args: opts.mcpServerArgs,
         },
       },
-      permissions: {
-        allow: ALLOWED_TOOLS.map((t) => `mcp__review__${t}`),
-        deny: ["Edit", "Write", "Bash", "NotebookEdit"],
-      },
     };
     const configPath = join(configDir, "mcp.json");
     await writeFile(configPath, JSON.stringify(mcpConfig, null, 2));
 
+    const args = [
+      "-p",
+      "--output-format",
+      "json",
+      "--mcp-config",
+      configPath,
+      "--strict-mcp-config",
+      "--allowedTools",
+      ALLOWED_TOOLS.join(","),
+      "--disallowedTools",
+      DISALLOWED_TOOLS.join(","),
+    ];
+
+    for (const dir of opts.addDirs ?? []) {
+      args.push("--add-dir", dir);
+    }
+
     try {
-      const result = await execa(
-        opts.claudeCliPath,
-        [
-          "-p",
-          "--output-format",
-          "json",
-          "--mcp-config",
-          configPath,
-          opts.prompt,
-        ],
-        {
-          timeout: opts.timeoutMs,
-          env: { ...process.env, ...opts.env },
-          reject: false,
-        },
-      );
+      const result = await execa(opts.claudeCliPath, args, {
+        timeout: opts.timeoutMs,
+        env: { ...process.env, ...opts.env },
+        cwd: opts.cwd,
+        input: opts.prompt,
+        reject: false,
+      });
 
       const timedOut = result.timedOut === true;
       return {
@@ -67,7 +82,13 @@ export async function runClaudeReview(opts: {
         timedOut,
       };
     } catch (err) {
-      const e = err as { timedOut?: boolean; stdout?: string; stderr?: string; exitCode?: number };
+      const e = err as {
+        timedOut?: boolean;
+        stdout?: string;
+        stderr?: string;
+        exitCode?: number;
+        message?: string;
+      };
       if (e.timedOut) {
         return {
           exitCode: 124,
@@ -76,7 +97,12 @@ export async function runClaudeReview(opts: {
           timedOut: true,
         };
       }
-      throw err;
+      return {
+        exitCode: 1,
+        stdout: e.stdout ?? "",
+        stderr: e.stderr ?? e.message ?? "claude spawn failed",
+        timedOut: false,
+      };
     }
   } finally {
     await rm(configDir, { recursive: true, force: true });

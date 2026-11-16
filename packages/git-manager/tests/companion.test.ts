@@ -47,4 +47,18 @@ describe("resolveCompanionBranch", () => {
       }),
     ).toThrow(TicketUnresolvedError);
   });
+
+  it("does not treat ABC-123 as a match for ticket ABC-12", () => {
+    const r = resolveCompanionBranch({
+      branches: [
+        "origin/develop",
+        "origin/feature/ABC-123-payments",
+        "origin/HEAD -> origin/develop",
+      ],
+      ticketId: "ABC-12",
+      fallbackBranch: "origin/develop",
+    });
+    expect(r.usedFallback).toBe(true);
+    expect(r.branch).toBe("origin/develop");
+  });
 });

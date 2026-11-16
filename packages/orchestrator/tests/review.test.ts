@@ -166,4 +166,37 @@ describe("runReview", () => {
       access(join(worktreeRoot, "rev-timeout")),
     ).rejects.toThrow();
   });
+
+  it("rejects unsafe reviewId before creating worktrees", async () => {
+    const { config, worktreeRoot } = await setupPair();
+    const claude = await makeFakeClaude(`echo ok`);
+    const result = await runReview(
+      {
+        prUrl: "https://github.com/acme/backend/pull/4",
+        reviewId: "..",
+      },
+      baseDeps(config, claude, "feature/ABC-123"),
+    );
+    expect(result.status).toBe("failed");
+    expect(result.error?.code).toBe("invalid_review_id");
+    await expect(access(join(worktreeRoot, ".."))).resolves.toBeUndefined();
+  });
+
+  it("records companion fallback when no ticket branch exists", async () => {
+    const { config } = await setupPair();
+    const claude = await makeFakeClaude(`echo '{"ok":true}'`);
+    const deps = baseDeps(config, claude, "feature/ABC-123");
+    deps.listRemoteBranches = async () => ["origin/develop"];
+    const result = await runReview(
+      {
+        prUrl: "https://github.com/acme/backend/pull/5",
+        reviewId: "rev-fallback",
+      },
+      deps,
+    );
+    expect(result.status).toBe("completed");
+    expect(result.metadata?.companionUsedFallback).toBe(true);
+    expect(result.metadata?.companionReason).toBe("no_ticket_branch");
+    expect(result.metadata?.companionBranch).toBe("origin/develop");
+  });
 });

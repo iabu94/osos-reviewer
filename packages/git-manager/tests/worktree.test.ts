@@ -63,4 +63,38 @@ describe("worktree", () => {
       worktreePath: wtB.worktreePath,
     });
   });
+
+  it("can create concurrent worktrees for the same branch while clone is on develop", async () => {
+    const fixture = await createFixtureRepo();
+    cleanups.push(fixture.cleanup);
+    const worktreeRoot = await mkdtemp(join(tmpdir(), "wt-conc-"));
+    cleanups.push(async () => {
+      const { rm } = await import("node:fs/promises");
+      await rm(worktreeRoot, { recursive: true, force: true });
+    });
+
+    const first = await createWorktree({
+      repoPath: fixture.repoPath,
+      worktreeRoot,
+      reviewId: "r1",
+      repoId: "be",
+      branch: "origin/develop",
+    });
+    const second = await createWorktree({
+      repoPath: fixture.repoPath,
+      worktreeRoot,
+      reviewId: "r2",
+      repoId: "be",
+      branch: "origin/develop",
+    });
+    expect(first.worktreePath).not.toBe(second.worktreePath);
+    await removeWorktree({
+      repoPath: fixture.repoPath,
+      worktreePath: first.worktreePath,
+    });
+    await removeWorktree({
+      repoPath: fixture.repoPath,
+      worktreePath: second.worktreePath,
+    });
+  });
 });
