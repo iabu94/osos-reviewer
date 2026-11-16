@@ -1,0 +1,169 @@
+import { describe, it, expect, afterEach } from "vitest";
+import { access, chmod, mkdtemp, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createFixtureRepo } from "../../git-manager/tests/fixture-repo.js";
+import { loadConfig, type AppConfig } from "@review/shared";
+import { runReview, parsePrUrl } from "../src/review.js";
+import type { ReviewDeps } from "../src/review.js";
+
+async function makeFakeClaude(scriptBody: string): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), "rev-claude-"));
+  const path = join(dir, "claude");
+  await writeFile(path, `#!/bin/sh\n${scriptBody}\n`);
+  await chmod(path, 0o755);
+  return path;
+}
+
+describe("parsePrUrl", () => {
+  it("parses GitHub PR URLs", () => {
+    expect(
+      parsePrUrl("https://github.com/acme/backend/pull/42"),
+    ).toEqual({
+      host: "github.com",
+      owner: "acme",
+      repo: "backend",
+      number: 42,
+    });
+  });
+});
+
+describe("runReview", () => {
+  const cleanups: Array<() => Promise<void>> = [];
+
+  afterEach(async () => {
+    while (cleanups.length) {
+      const fn = cleanups.pop();
+      if (fn) await fn();
+    }
+  });
+
+  async function setupPair(): Promise<{
+    be: { repoPath: string };
+    fe: { repoPath: string };
+    config: AppConfig;
+    worktreeRoot: string;
+  }> {
+    const be = await createFixtureRepo();
+    const fe = await createFixtureRepo();
+    cleanups.push(be.cleanup, fe.cleanup);
+    const worktreeRoot = await mkdtemp(join(tmpdir(), "orch-wt-"));
+    cleanups.push(async () =>
+      rm(worktreeRoot, { recursive: true, force: true }),
+    );
+
+    const config = loadConfig({
+      DATABASE_URL: "postgres://review:review@localhost:5433/review",
+      WORKTREE_ROOT: worktreeRoot,
+      CLAUDE_CLI_PATH: "claude",
+      REPOS_JSON: JSON.stringify([
+        {
+          id: "be",
+          role: "backend",
+          localPath: be.repoPath,
+          defaultBaseBranch: "develop",
+          githubRepo: "acme/backend",
+        },
+        {
+          id: "fe",
+          role: "frontend",
+          localPath: fe.repoPath,
+          defaultBaseBranch: "develop",
+          githubRepo: "acme/frontend",
+        },
+      ]),
+    });
+
+    return { be, fe, config, worktreeRoot };
+  }
+
+  function baseDeps(
+    config: AppConfig,
+    claudePath: string,
+    headRef: string,
+  ): ReviewDeps {
+    return {
+      config,
+      requireDb: false,
+      claudeCliPath: claudePath,
+      mcpServerCommand: "echo",
+      mcpServerArgs: ["mcp"],
+      getPrBranches: async () => ({
+        primaryBranch: headRef,
+        targetBranch: "develop",
+        headRef,
+      }),
+      listRemoteBranches: async (repoPath) => {
+        const { execa } = await import("execa");
+        const { stdout } = await execa("git", ["branch", "-r"], {
+          cwd: repoPath,
+        });
+        return stdout
+          .split("\n")
+          .map((l) => l.trim())
+          .filter(Boolean);
+      },
+    };
+  }
+
+  it("completes happy path and cleans worktrees", async () => {
+    const { config, worktreeRoot } = await setupPair();
+    const claude = await makeFakeClaude(`echo '{"ok":true}'`);
+    const result = await runReview(
+      {
+        prUrl: "https://github.com/acme/backend/pull/1",
+        reviewId: "rev-happy",
+      },
+      baseDeps(config, claude, "feature/ABC-123"),
+    );
+
+    expect(result.status).toBe("completed");
+    expect(result.metadata?.ticketId).toBe("ABC-123");
+    expect(result.metadata?.companionRepoId).toBe("fe");
+    expect(result.metadata?.companionBranch).toBeTruthy();
+    expect(result.metadata?.diffChars).toBeGreaterThan(0);
+
+    await expect(
+      access(join(worktreeRoot, "rev-happy")),
+    ).rejects.toThrow();
+  });
+
+  it("fails on unresolved ticket and cleans worktrees", async () => {
+    const { config, worktreeRoot } = await setupPair();
+    const claude = await makeFakeClaude(`echo '{"ok":true}'`);
+    const result = await runReview(
+      {
+        prUrl: "https://github.com/acme/backend/pull/2",
+        reviewId: "rev-noticket",
+      },
+      baseDeps(config, claude, "feature/no-ticket"),
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.error?.code).toBe("ticket_unresolved");
+    await expect(
+      access(join(worktreeRoot, "rev-noticket")),
+    ).rejects.toThrow();
+  });
+
+  it("fails on Claude timeout and still cleans worktrees", async () => {
+    const { config, worktreeRoot } = await setupPair();
+    const claude = await makeFakeClaude(`sleep 2\necho ok`);
+    const deps = baseDeps(config, claude, "feature/ABC-123");
+    deps.config = { ...config, reviewTimeoutMs: 50 };
+
+    const result = await runReview(
+      {
+        prUrl: "https://github.com/acme/backend/pull/3",
+        reviewId: "rev-timeout",
+      },
+      deps,
+    );
+
+    expect(result.status).toBe("failed");
+    expect(result.error?.code).toBe("claude_timeout");
+    await expect(
+      access(join(worktreeRoot, "rev-timeout")),
+    ).rejects.toThrow();
+  });
+});
