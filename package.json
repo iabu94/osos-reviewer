@@ -5,7 +5,8 @@
   "scripts": {
     "test": "pnpm -r --if-present test",
     "build": "pnpm -r --if-present build",
-    "typecheck": "pnpm -r --if-present typecheck"
+    "typecheck": "pnpm -r --if-present typecheck",
+    "smoke:phase1": "bash ./scripts/smoke-phase1.sh"
   },
   "engines": {
     "node": ">=22"
