@@ -113,10 +113,14 @@ describe("discoverDocuments", () => {
     await writeMarkdown(root, "security/database/notes.txt", "not markdown\n");
     await writeMarkdown(root, "misc/angular/ignored.md", "# Ignored\n");
 
-    const docs = await discoverDocuments(root);
+    const skipped: string[] = [];
+    const docs = await discoverDocuments(root, {
+      onSkippedTopLevel: (entry) => skipped.push(entry),
+    });
 
     expect(docs.map((doc) => doc.relativePath)).toEqual([
       "security/database/access.md",
     ]);
+    expect(skipped).toEqual(["misc"]);
   });
 });

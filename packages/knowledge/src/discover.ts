@@ -75,9 +75,16 @@ function readTitle(markdown: string, absolutePath: string): string {
   return parse(absolutePath).name;
 }
 
+export interface DiscoverOptions {
+  /** Called once per unknown top-level entry whose Markdown files were skipped. */
+  onSkippedTopLevel?: (topLevelEntry: string) => void;
+}
+
 export async function discoverDocuments(
   rootDir: string,
+  options: DiscoverOptions = {},
 ): Promise<DiscoveredDocument[]> {
+  const skipped = new Set<string>();
   const root = resolve(rootDir);
   const files = await collectMarkdownFiles(root);
   const documents = await Promise.all(
@@ -85,6 +92,7 @@ export async function discoverDocuments(
       const relativePath = relative(root, absolutePath).split(sep).join("/");
       const [categorySegment, technologySegment] = relativePath.split("/");
       if (!categories.has(categorySegment as DocumentCategory)) {
+        skipped.add(categorySegment);
         return null;
       }
 
@@ -102,6 +110,10 @@ export async function discoverDocuments(
       };
     }),
   );
+
+  for (const entry of [...skipped].sort()) {
+    options.onSkippedTopLevel?.(entry);
+  }
 
   return documents
     .filter((document): document is DiscoveredDocument => document !== null)

@@ -7,6 +7,8 @@ const EMBEDDING_DIMENSIONS = 768 as const;
 export interface EmbeddingProvider {
   embed(texts: string[]): Promise<number[][]>;
   readonly dimensions: 768;
+  /** Stable `provider:model` id stored with each vector. */
+  readonly modelId: string;
 }
 
 export class EmbeddingError extends Error {
@@ -16,8 +18,11 @@ export class EmbeddingError extends Error {
   }
 }
 
+export const FAKE_EMBEDDING_MODEL_ID = "fake:token-hash-768";
+
 export class FakeEmbeddingProvider implements EmbeddingProvider {
   readonly dimensions = EMBEDDING_DIMENSIONS;
+  readonly modelId = FAKE_EMBEDDING_MODEL_ID;
 
   async embed(texts: string[]): Promise<number[][]> {
     return texts.map((text) => {
@@ -43,12 +48,15 @@ export class OpenAICompatibleEmbeddingProvider
   implements EmbeddingProvider
 {
   readonly dimensions = EMBEDDING_DIMENSIONS;
+  readonly modelId: string;
 
   constructor(
     private readonly baseUrl: string,
     private readonly apiKey: string,
     private readonly model: string,
-  ) {}
+  ) {
+    this.modelId = `openai_compatible:${model}`;
+  }
 
   async embed(texts: string[]): Promise<number[][]> {
     if (texts.length === 0) {

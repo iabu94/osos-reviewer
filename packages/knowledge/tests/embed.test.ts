@@ -22,6 +22,23 @@ describe("createEmbeddingProvider", () => {
     expect(a).toEqual(b);
   });
 
+  it("exposes stable provider:model ids", () => {
+    const fake = createEmbeddingProvider({
+      provider: "fake",
+      model: "ignored",
+      dimensions: 768,
+    });
+    expect(fake.modelId).toBe("fake:token-hash-768");
+    const remote = createEmbeddingProvider({
+      provider: "openai_compatible",
+      baseUrl: "https://embeddings.example.test",
+      apiKey: "k",
+      model: "text-embedding-3-small",
+      dimensions: 768,
+    });
+    expect(remote.modelId).toBe("openai_compatible:text-embedding-3-small");
+  });
+
   it("gives texts with shared tokens a positive cosine similarity", async () => {
     const p = createEmbeddingProvider({
       provider: "fake",

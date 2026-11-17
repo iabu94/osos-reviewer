@@ -1,6 +1,11 @@
 import { fileURLToPath } from "node:url";
 
-import { createPool, migrate } from "@review/db";
+import {
+  createPool,
+  ensureDatabase,
+  migrate,
+  resolveTestDatabaseUrl,
+} from "@review/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
@@ -9,17 +14,19 @@ import {
   retrieveCodingStandards,
 } from "../src/index.js";
 
-const databaseUrl = process.env.DATABASE_URL;
+const databaseUrl = resolveTestDatabaseUrl();
 const describeWithDatabase = databaseUrl ? describe : describe.skip;
 const knowledgeBaseRoot = fileURLToPath(
   new URL("../../../knowledge-base", import.meta.url),
 );
 
 describeWithDatabase("retrieveCodingStandards", () => {
-  const pool = createPool(databaseUrl!);
+  let pool: ReturnType<typeof createPool>;
   const embedder = new FakeEmbeddingProvider();
 
   beforeAll(async () => {
+    await ensureDatabase(databaseUrl!);
+    pool = createPool(databaseUrl!);
     await migrate(pool);
     await pool.query("TRUNCATE document_chunks");
     await ingestKnowledgeBase({
@@ -55,6 +62,20 @@ describeWithDatabase("retrieveCodingStandards", () => {
     });
     expect(dotnetOnly.every((r) => r.technology === "dotnet")).toBe(true);
     expect(dotnetOnly.some((r) => /OnPush/i.test(r.ruleText))).toBe(false);
+  });
+
+  it("ignores rows embedded by a different model", async () => {
+    const otherModel = {
+      dimensions: 768 as const,
+      modelId: "fake:other-model",
+      embed: (texts: string[]) => embedder.embed(texts),
+    };
+    const hits = await retrieveCodingStandards({
+      pool,
+      embedder: otherModel,
+      query: "Angular component change detection OnPush",
+    });
+    expect(hits).toEqual([]);
   });
 
   it("returns empty array when index has no rows", async () => {

@@ -12,7 +12,7 @@ import {
 import {
   deleteChunksForMissingPaths,
   deleteChunksNotIn,
-  hasOnlyContentHash,
+  isDocumentCurrent,
   upsertChunks,
   type StoredChunk,
 } from "./store.js";
@@ -24,6 +24,18 @@ export interface IngestReport {
   chunksUpserted: number;
   chunksDeleted: number;
   documentsSkippedUnchanged: number;
+  /** Unknown top-level knowledge-base entries whose Markdown was ignored. */
+  skippedTopLevel: string[];
+}
+
+export class EmptyDiscoveryError extends Error {
+  constructor(rootDir: string) {
+    super(
+      `No ingestable documents found under ${rootDir}; refusing to delete the existing index. ` +
+        "Pass allowEmpty (CLI: --force-empty) to clear it intentionally.",
+    );
+    this.name = "EmptyDiscoveryError";
+  }
 }
 
 async function embedChunks(
@@ -48,23 +60,41 @@ export async function ingestKnowledgeBase(opts: {
   rootDir: string;
   pool: Pool;
   embedder: EmbeddingProvider;
+  /** Allow orphan cleanup when discovery finds zero documents. Default false. */
+  allowEmpty?: boolean;
+  warn?: (message: string) => void;
 }): Promise<IngestReport> {
-  const documents = await discoverDocuments(opts.rootDir);
+  const warn = opts.warn ?? ((message: string) => console.warn(message));
+  const skippedTopLevel: string[] = [];
+  const documents = await discoverDocuments(opts.rootDir, {
+    onSkippedTopLevel: (entry) => {
+      skippedTopLevel.push(entry);
+      warn(
+        `Skipping Markdown under unknown top-level entry "${entry}" (expected coding-standards, architecture, or security)`,
+      );
+    },
+  });
+  if (documents.length === 0 && !opts.allowEmpty) {
+    throw new EmptyDiscoveryError(opts.rootDir);
+  }
   const report: IngestReport = {
     documentsSeen: documents.length,
     chunksUpserted: 0,
     chunksDeleted: 0,
     documentsSkippedUnchanged: 0,
+    skippedTopLevel,
   };
 
+  const embeddingModel = opts.embedder.modelId;
   for (const document of documents) {
     const fileBytes = await readFile(document.absolutePath);
     const contentHash = createHash("sha256").update(fileBytes).digest("hex");
     if (
-      await hasOnlyContentHash(
+      await isDocumentCurrent(
         opts.pool,
         document.relativePath,
         contentHash,
+        embeddingModel,
       )
     ) {
       report.documentsSkippedUnchanged += 1;
@@ -80,6 +110,7 @@ export async function ingestKnowledgeBase(opts: {
       ...draft,
       contentHash,
       embedding: embeddings[index],
+      embeddingModel,
     }));
 
     const client = await opts.pool.connect();

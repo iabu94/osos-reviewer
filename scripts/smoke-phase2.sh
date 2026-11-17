@@ -5,6 +5,13 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 export DATABASE_URL="${DATABASE_URL:-postgres://review:review@localhost:5433/review}"
+# Tests TRUNCATE tables, so they run against a separate database on the same server.
+TEST_DB_NAME="${TEST_DB_NAME:-review_test}"
+export TEST_DATABASE_URL="${TEST_DATABASE_URL:-${DATABASE_URL%/*}/$TEST_DB_NAME}"
+if [ "$TEST_DATABASE_URL" = "$DATABASE_URL" ]; then
+  echo "TEST_DATABASE_URL must differ from DATABASE_URL" >&2
+  exit 1
+fi
 # Always fake: never call a real embedding API from smoke.
 export EMBEDDING_PROVIDER=fake
 
@@ -34,11 +41,21 @@ if ! pg_ready; then
   exit 1
 fi
 
-echo "==> Migrating and ingesting knowledge base (EMBEDDING_PROVIDER=$EMBEDDING_PROVIDER)"
-pnpm --filter @review/knowledge ingest
-
-echo "==> Running knowledge + MCP server tests"
+echo "==> Running knowledge + MCP server tests against $TEST_DATABASE_URL"
+# Tests create the test database on demand and never touch DATABASE_URL.
+pnpm --filter @review/db test
 pnpm --filter @review/knowledge test
 pnpm --filter @review/mcp-server test
+
+echo "==> Migrating and ingesting knowledge base (EMBEDDING_PROVIDER=$EMBEDDING_PROVIDER)"
+# Ingest last so the real index is populated when smoke finishes.
+pnpm --filter @review/knowledge ingest
+
+echo "==> Verifying real index is populated"
+if command -v psql >/dev/null 2>&1; then
+  COUNT="$(psql "$DATABASE_URL" -Atc 'select count(*) from document_chunks')"
+  echo "    document_chunks rows: $COUNT"
+  [ "$COUNT" -gt 0 ] || { echo "Real index is empty" >&2; exit 1; }
+fi
 
 echo "Phase 2 smoke OK"

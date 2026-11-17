@@ -5,6 +5,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 export DATABASE_URL="${DATABASE_URL:-postgres://review:review@localhost:5433/review}"
+# DB tests truncate tables; keep them off the real database.
+export TEST_DATABASE_URL="${TEST_DATABASE_URL:-${DATABASE_URL%/*}/review_test}"
 
 echo "==> Starting Postgres (pgvector on host port 5433)"
 docker compose up -d

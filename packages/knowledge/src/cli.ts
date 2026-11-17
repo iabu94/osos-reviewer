@@ -1,14 +1,12 @@
 #!/usr/bin/env tsx
-import { isAbsolute, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 
 import { createPool, migrate } from "@review/db";
 import { loadConfig } from "@review/shared";
 
 import { createEmbeddingProvider } from "./embed.js";
 import { ingestKnowledgeBase, type IngestReport } from "./ingest.js";
-
-const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
+import { resolveKnowledgeBasePath } from "./paths.js";
 
 /** Ingest only needs the database and embedding settings; default the rest. */
 export function withIngestDefaults(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
@@ -19,16 +17,22 @@ export function withIngestDefaults(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   };
 }
 
-export async function runIngest(env: NodeJS.ProcessEnv): Promise<IngestReport> {
+export async function runIngest(
+  env: NodeJS.ProcessEnv,
+  options: { allowEmpty?: boolean } = {},
+): Promise<IngestReport> {
   const config = loadConfig(withIngestDefaults(env));
-  const rootDir = isAbsolute(config.knowledgeBasePath)
-    ? config.knowledgeBasePath
-    : resolve(env.INIT_CWD ?? REPO_ROOT, config.knowledgeBasePath);
+  const rootDir = resolveKnowledgeBasePath(config.knowledgeBasePath);
   const pool = createPool(config.databaseUrl);
   try {
     await migrate(pool);
     const embedder = createEmbeddingProvider(config.embedding);
-    return await ingestKnowledgeBase({ rootDir, pool, embedder });
+    return await ingestKnowledgeBase({
+      rootDir,
+      pool,
+      embedder,
+      allowEmpty: options.allowEmpty,
+    });
   } finally {
     await pool.end();
   }
@@ -37,7 +41,9 @@ export async function runIngest(env: NodeJS.ProcessEnv): Promise<IngestReport> {
 const entry = process.argv[1] ? pathToFileURL(process.argv[1]).href : undefined;
 
 if (entry && import.meta.url === entry) {
-  runIngest(process.env)
+  runIngest(process.env, {
+    allowEmpty: process.argv.slice(2).includes("--force-empty"),
+  })
     .then((report) => {
       process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     })

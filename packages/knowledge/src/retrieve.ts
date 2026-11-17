@@ -30,8 +30,9 @@ export async function retrieveCodingStandards(opts: {
   }
 
   const [embedding] = await opts.embedder.embed([opts.query]);
-  const values: unknown[] = [`[${embedding.join(",")}]`];
-  const filters: string[] = [];
+  const values: unknown[] = [`[${embedding.join(",")}]`, opts.embedder.modelId];
+  // Never compare vectors from different embedding models.
+  const filters: string[] = ["embedding_model = $2"];
 
   if (opts.category !== undefined) {
     values.push(opts.category);
@@ -44,8 +45,7 @@ export async function retrieveCodingStandards(opts: {
 
   const limit = Math.min(10, Math.max(0, Math.floor(opts.limit ?? 5)));
   values.push(limit);
-  const whereClause =
-    filters.length === 0 ? "" : `WHERE ${filters.join(" AND ")}`;
+  const whereClause = `WHERE ${filters.join(" AND ")}`;
   const result = await opts.pool.query<RetrievalRow>(
     `SELECT
        source_path,

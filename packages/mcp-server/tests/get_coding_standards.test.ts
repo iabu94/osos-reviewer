@@ -1,6 +1,11 @@
 import { fileURLToPath } from "node:url";
 
-import { createPool, migrate } from "@review/db";
+import {
+  createPool,
+  ensureDatabase,
+  migrate,
+  resolveTestDatabaseUrl,
+} from "@review/db";
 import {
   FakeEmbeddingProvider,
   ingestKnowledgeBase,
@@ -13,24 +18,28 @@ import type { Pool } from "pg";
 import { handleGetCodingStandards } from "../src/tools/get_coding_standards.js";
 import { handleToolRouted } from "../src/tools/router.js";
 
-const databaseUrl = process.env.DATABASE_URL;
+const databaseUrl = resolveTestDatabaseUrl();
 const describeWithDatabase = databaseUrl ? describe : describe.skip;
 const knowledgeBaseRoot = fileURLToPath(
   new URL("../../../knowledge-base", import.meta.url),
 );
 
 describeWithDatabase("get_coding_standards", () => {
-  const pool = createPool(databaseUrl!);
+  let pool: ReturnType<typeof createPool>;
   const embedder = new FakeEmbeddingProvider();
-  const deps = { pool, embedder };
+  let deps: { pool: typeof pool; embedder: typeof embedder };
   const explodingEmbedder: EmbeddingProvider = {
     dimensions: 768,
+    modelId: "fake:exploding",
     async embed() {
       throw new Error("embedder offline");
     },
   };
 
   beforeAll(async () => {
+    await ensureDatabase(databaseUrl!);
+    pool = createPool(databaseUrl!);
+    deps = { pool, embedder };
     await migrate(pool);
     await pool.query("TRUNCATE document_chunks");
     await ingestKnowledgeBase({ rootDir: knowledgeBaseRoot, pool, embedder });

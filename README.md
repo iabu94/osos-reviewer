@@ -78,11 +78,12 @@ Category comes from the top-level folder and technology from the sub-folder.
 | Variable | Default | Notes |
 |----------|---------|-------|
 | `DATABASE_URL` | required | e.g. `postgres://review:review@localhost:5433/review` |
-| `KNOWLEDGE_BASE_PATH` | `knowledge-base` | Relative paths resolve from the repo root |
+| `KNOWLEDGE_BASE_PATH` | `knowledge-base` | Absolute, or relative to the repository root (never the current directory) |
+| `TEST_DATABASE_URL` | unset | Tests only; e.g. `postgres://review:review@localhost:5433/review_test`. DB tests are skipped without it and refuse to run against `DATABASE_URL` |
 | `EMBEDDING_PROVIDER` | `openai_compatible` | `fake` for tests/smoke (no API key needed) |
 | `EMBEDDING_BASE_URL` | `https://api.openai.com/v1` | |
 | `EMBEDDING_API_KEY` | | Required unless provider is `fake` |
-| `EMBEDDING_MODEL` | `text-embedding-3-small` | Vectors are 768-dimensional |
+| `EMBEDDING_MODEL` | `text-embedding-3-small` | Vectors are 768-dimensional; stored per chunk as `provider:model` |
 
 **Ingest** (migrates, embeds, upserts changed docs, removes deleted ones, prints an `IngestReport` JSON):
 
@@ -90,7 +91,18 @@ Category comes from the top-level folder and technology from the sub-folder.
 pnpm --filter @review/knowledge ingest
 ```
 
-**Smoke test:** `pnpm smoke:phase2` (or `EMBEDDING_PROVIDER=fake ./scripts/smoke-phase2.sh`).
+- Unchanged documents are skipped only when both file content and embedding model match; changing `EMBEDDING_PROVIDER`/`EMBEDDING_MODEL` re-embeds everything, and retrieval only returns chunks from the current model.
+- If discovery finds zero documents, ingest refuses to delete the existing index. Pass `--force-empty` (`pnpm --filter @review/knowledge ingest --force-empty`) to clear it intentionally.
+- Markdown under unknown top-level folders is skipped with a warning on stderr.
+
+**Tests:** DB-backed suites truncate tables, so they use a separate database (`TEST_DATABASE_URL`, created on demand) and never touch the real index:
+
+```bash
+export TEST_DATABASE_URL=postgres://review:review@localhost:5433/review_test
+pnpm test
+```
+
+**Smoke test:** `pnpm smoke:phase2` (or `EMBEDDING_PROVIDER=fake ./scripts/smoke-phase2.sh`). It runs tests against `review_test`, then ingests into the real `DATABASE_URL` so the index is left populated.
 
 Only `get_coding_standards` is live. `trace_fe_be_integration`, `trace_symbol_impact`, and `check_reusability` remain Phase 1 stubs. The MCP server reads the same env vars lazily on the first standards call.
 
