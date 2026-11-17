@@ -153,9 +153,17 @@ All four MCP tools are live. They read the same Postgres code index and knowledg
 
 `check_reusability` explanations use **candidate** wording — they are hints for human review, not proof of duplication. When any embeddings exist in the searched scope, the vector path is preferred and name-only matches for symbols without embeddings may not appear (Task 4 retrieval behavior).
 
-Phase 5 still owns the Claude review prompt and Teams integration; MCP tools return retrieval payloads only.
-
 **Smoke test:** `pnpm smoke:phase4` (or `EMBEDDING_PROVIDER=fake ./scripts/smoke-phase4.sh`) indexes happy-path and deliberate-mismatch fixtures into `TEST_DATABASE_URL`, then runs `@review/code-intel` and `@review/mcp-server` tests.
+
+## Phase 5 — Claude structured review
+
+The orchestrator builds a structured review prompt (`buildReviewPrompt`), invokes Claude Code in headless mode with `--permission-mode dontAsk`, JSON output, and `REVIEW_OUTPUT_JSON_SCHEMA` for structured findings, then validates stdout via `parseClaudeReviewOutput`. Successful runs attach `report` and token/duration `diagnostics` on `ReviewResult`; the CLI prints the full JSON payload.
+
+Allowed tools include read-only `Read` plus the four `mcp__review__*` MCP tools; edit/write/bash tools stay disallowed.
+
+Teams Adaptive Card delivery is deferred to Phase 6. If a real `claude` binary is on `PATH`, Phase 5 smoke still only runs unit tests (no live invoke / billing).
+
+**Smoke test:** `pnpm smoke:phase5` (or `./scripts/smoke-phase5.sh`) runs `@review/orchestrator` tests with fake Claude fixtures.
 
 ## Packages
 

@@ -2,8 +2,10 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execa } from "execa";
+import { REVIEW_OUTPUT_JSON_SCHEMA } from "./review-schema.js";
 
 const ALLOWED_TOOLS = [
+  "Read",
   "mcp__review__trace_fe_be_integration",
   "mcp__review__trace_symbol_impact",
   "mcp__review__check_reusability",
@@ -52,6 +54,10 @@ export async function runClaudeReview(opts: {
       "-p",
       "--output-format",
       "json",
+      "--permission-mode",
+      "dontAsk",
+      "--json-schema",
+      JSON.stringify(REVIEW_OUTPUT_JSON_SCHEMA),
       "--mcp-config",
       configPath,
       "--strict-mcp-config",

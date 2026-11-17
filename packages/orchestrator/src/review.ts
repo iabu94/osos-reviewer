@@ -19,6 +19,8 @@ import { createPool, healthCheck, migrate } from "@review/db";
 import { cleanupPrIndex, indexPrDelta } from "@review/code-intel";
 import { createEmbeddingProvider } from "@review/knowledge";
 import { runClaudeReview } from "./claude.js";
+import { parseClaudeReviewOutput } from "./parse-claude.js";
+import { buildReviewPrompt } from "./prompt.js";
 
 const REVIEW_ID_RE = /^[A-Za-z0-9_-]+$/;
 
@@ -95,31 +97,13 @@ async function defaultDbHealth(databaseUrl: string) {
   }
 }
 
-function buildPrompt(input: {
-  request: ReviewRequest;
-  metadata: ReviewMetadata;
-  diff: string;
-  primaryWorktree: string;
-  companionWorktree: string;
-}): string {
-  return [
-    "You are performing a read-only code review. Do not modify files, commit, push, or merge.",
-    "Use MCP tools only when you need additional context.",
-    "",
-    `Review ID: ${input.request.reviewId}`,
-    `PR URL: ${input.request.prUrl}`,
-    `Primary worktree: ${input.primaryWorktree}`,
-    `Companion worktree: ${input.companionWorktree}`,
-    `Primary repo: ${input.metadata.primaryRepoId}`,
-    `Primary branch: ${input.metadata.primaryBranch}`,
-    `Primary HEAD: ${input.metadata.primaryHeadSha ?? "unknown"}`,
-    `Target branch: ${input.metadata.targetBranch}`,
-    `Ticket: ${input.metadata.ticketId}`,
-    `Companion: ${input.metadata.companionRepoId} @ ${input.metadata.companionBranch} (fallback=${input.metadata.companionUsedFallback}, reason=${input.metadata.companionReason})`,
-    "",
-    "Focused diff:",
-    input.diff,
-  ].join("\n");
+function repoIdsByRole(config: AppConfig, role: "backend" | "frontend"): string[] {
+  return config.repos.filter((r) => r.role === role).map((r) => r.id);
+}
+
+function tryDiagnosticsFromStdout(stdout: string) {
+  const parsed = parseClaudeReviewOutput(stdout);
+  return parsed.diagnostics;
 }
 
 export async function runReview(
@@ -345,12 +329,14 @@ export async function runReview(
       companionHeadSha: companionWt.headSha,
     };
 
-    const prompt = buildPrompt({
+    const prompt = buildReviewPrompt({
       request,
       metadata,
       diff,
       primaryWorktree: primaryWt.worktreePath,
       companionWorktree: companionWt.worktreePath,
+      backendRepoIds: repoIdsByRole(deps.config, "backend"),
+      frontendRepoIds: repoIdsByRole(deps.config, "frontend"),
     });
     const runClaude = deps.runClaude ?? runClaudeReview;
     const claude = await runClaude({
@@ -369,6 +355,7 @@ export async function runReview(
         status: "failed",
         metadata,
         claudeStdout: claude.stdout,
+        diagnostics: tryDiagnosticsFromStdout(claude.stdout),
         error: {
           code: "claude_timeout",
           message: claude.stderr || "Claude Code review timed out",
@@ -382,9 +369,28 @@ export async function runReview(
         status: "failed",
         metadata,
         claudeStdout: claude.stdout,
+        diagnostics: tryDiagnosticsFromStdout(claude.stdout),
         error: {
           code: "claude_failed",
           message: claude.stderr || `Claude exited ${claude.exitCode}`,
+        },
+      };
+    }
+
+    const claudeOutput = parseClaudeReviewOutput(claude.stdout);
+    if (!claudeOutput.ok) {
+      return {
+        reviewId: request.reviewId,
+        status: "failed",
+        metadata,
+        claudeStdout: claude.stdout,
+        diagnostics: claudeOutput.diagnostics,
+        error: {
+          code:
+            claudeOutput.code === "claude_envelope_error"
+              ? "claude_failed"
+              : "invalid_review_output",
+          message: claudeOutput.message,
         },
       };
     }
@@ -394,6 +400,8 @@ export async function runReview(
       status: "completed",
       metadata,
       claudeStdout: claude.stdout,
+      report: claudeOutput.report,
+      diagnostics: claudeOutput.diagnostics,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

@@ -1,8 +1,13 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { chmod, mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { runClaudeReview } from "../src/claude.js";
+
+const successNoFindings = fileURLToPath(
+  new URL("../fixtures/claude/success-no-findings.json", import.meta.url),
+);
 
 describe("runClaudeReview", () => {
   let binDir: string;
@@ -18,11 +23,11 @@ describe("runClaudeReview", () => {
 
     await writeFile(
       okCli,
-      `#!/bin/sh\nprintf '%s\\n' "$@" > "${argvFile}"\necho '{"ok":true}'\n`,
+      `#!/bin/sh\nprintf '%s\\n' "$@" > "${argvFile}"\ncat "${successNoFindings}"\n`,
     );
     await writeFile(
       slowCli,
-      `#!/bin/sh\nsleep 2\necho '{"ok":true}'\n`,
+      `#!/bin/sh\nsleep 2\ncat "${successNoFindings}"\n`,
     );
     await chmod(okCli, 0o755);
     await chmod(slowCli, 0o755);
@@ -40,11 +45,15 @@ describe("runClaudeReview", () => {
     });
     expect(result.exitCode).toBe(0);
     expect(result.timedOut).toBe(false);
-    expect(result.stdout).toContain('{"ok":true}');
+    expect(result.stdout).toContain("structured_output");
     const argv = await readFile(argvFile, "utf8");
     expect(argv).toContain("-p");
+    expect(argv).toContain("--json-schema");
+    expect(argv).toContain("--permission-mode");
+    expect(argv).toContain("dontAsk");
     expect(argv).toContain("--strict-mcp-config");
     expect(argv).toContain("--allowedTools");
+    expect(argv).toContain("Read");
     expect(argv).toContain("mcp__review__trace_fe_be_integration");
     expect(argv).toContain("--disallowedTools");
     expect(argv).not.toContain("UNIQUE_PROMPT");

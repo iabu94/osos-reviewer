@@ -2,10 +2,17 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { access, chmod, mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createFixtureRepo } from "../../git-manager/tests/fixture-repo.js";
-import { loadConfig, type AppConfig } from "@review/shared";
+import { loadConfig, NO_FINDINGS_SUMMARY, type AppConfig } from "@review/shared";
 import { runReview, parsePrUrl } from "../src/review.js";
 import type { ReviewDeps } from "../src/review.js";
+
+function fixturePath(name: string): string {
+  return fileURLToPath(
+    new URL(`../fixtures/claude/${name}`, import.meta.url),
+  );
+}
 
 async function makeFakeClaude(scriptBody: string): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "rev-claude-"));
@@ -13,6 +20,11 @@ async function makeFakeClaude(scriptBody: string): Promise<string> {
   await writeFile(path, `#!/bin/sh\n${scriptBody}\n`);
   await chmod(path, 0o755);
   return path;
+}
+
+async function makeFakeClaudeFixture(fixtureName: string): Promise<string> {
+  const fp = fixturePath(fixtureName);
+  return makeFakeClaude(`cat '${fp}'`);
 }
 
 describe("parsePrUrl", () => {
@@ -109,7 +121,7 @@ describe("runReview", () => {
 
   it("completes happy path and cleans worktrees", async () => {
     const { config, worktreeRoot } = await setupPair();
-    const claude = await makeFakeClaude(`echo '{"ok":true}'`);
+    const claude = await makeFakeClaudeFixture("success-no-findings.json");
     const result = await runReview(
       {
         prUrl: "https://github.com/acme/backend/pull/1",
@@ -119,6 +131,7 @@ describe("runReview", () => {
     );
 
     expect(result.status).toBe("completed");
+    expect(result.report?.findings).toEqual([]);
     expect(result.metadata?.ticketId).toBe("ABC-123");
     expect(result.metadata?.companionRepoId).toBe("fe");
     expect(result.metadata?.companionBranch).toBeTruthy();
@@ -131,7 +144,7 @@ describe("runReview", () => {
 
   it("fails on unresolved ticket and cleans worktrees", async () => {
     const { config, worktreeRoot } = await setupPair();
-    const claude = await makeFakeClaude(`echo '{"ok":true}'`);
+    const claude = await makeFakeClaudeFixture("success-no-findings.json");
     const result = await runReview(
       {
         prUrl: "https://github.com/acme/backend/pull/2",
@@ -185,7 +198,7 @@ describe("runReview", () => {
 
   it("records companion fallback when no ticket branch exists", async () => {
     const { config } = await setupPair();
-    const claude = await makeFakeClaude(`echo '{"ok":true}'`);
+    const claude = await makeFakeClaudeFixture("success-no-findings.json");
     const deps = baseDeps(config, claude, "feature/ABC-123");
     deps.listRemoteBranches = async () => ["origin/develop"];
     const result = await runReview(
@@ -222,7 +235,7 @@ describe("runReview", () => {
 
   it("runs PR delta indexing and cleans up PR index", async () => {
     const { config } = await setupPair();
-    const claude = await makeFakeClaude(`echo '{"ok":true}'`);
+    const claude = await makeFakeClaudeFixture("success-no-findings.json");
     const mocks = mockPoolDeps();
     const request = {
       prUrl: "https://github.com/acme/backend/pull/6",
@@ -298,5 +311,49 @@ describe("runReview", () => {
     await expect(
       access(join(worktreeRoot, "rev-index-fail")),
     ).rejects.toThrow();
+  });
+
+  it("completed review attaches structured report from Claude stdout", async () => {
+    const { config } = await setupPair();
+    const claude = await makeFakeClaudeFixture("success-finding.json");
+    const result = await runReview(
+      {
+        prUrl: "https://github.com/acme/backend/pull/9",
+        reviewId: "rev-report",
+      },
+      baseDeps(config, claude, "feature/ABC-123"),
+    );
+    expect(result.status).toBe("completed");
+    expect(result.report?.findings[0]?.category).toBe("integration");
+    expect(result.diagnostics?.inputTokens).toBe(100);
+  });
+
+  it("missing structured_output fails with invalid_review_output", async () => {
+    const { config } = await setupPair();
+    const claude = await makeFakeClaudeFixture("missing-structured-output.json");
+    const result = await runReview(
+      {
+        prUrl: "https://github.com/acme/backend/pull/10",
+        reviewId: "rev-missing-structured",
+      },
+      baseDeps(config, claude, "feature/ABC-123"),
+    );
+    expect(result.status).toBe("failed");
+    expect(result.error?.code).toBe("invalid_review_output");
+  });
+
+  it("empty findings completes with NO_FINDINGS_SUMMARY", async () => {
+    const { config } = await setupPair();
+    const claude = await makeFakeClaudeFixture("success-no-findings.json");
+    const result = await runReview(
+      {
+        prUrl: "https://github.com/acme/backend/pull/11",
+        reviewId: "rev-no-findings",
+      },
+      baseDeps(config, claude, "feature/ABC-123"),
+    );
+    expect(result.status).toBe("completed");
+    expect(result.report?.findings).toEqual([]);
+    expect(result.report?.summary).toBe(NO_FINDINGS_SUMMARY);
   });
 });
