@@ -1,0 +1,130 @@
+import { pathToFileURL } from "node:url";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import type { Server } from "node:http";
+import { execa } from "execa";
+import { createPool, migrate } from "@review/db";
+import {
+  createLogger,
+  createReviewWorker,
+  resolvePrBranchesViaGithub,
+  runReview,
+} from "@review/orchestrator";
+import type { ReviewDeps } from "@review/orchestrator";
+import { loadConfig } from "@review/shared";
+import { createHttpTeamsMessenger } from "./messenger.js";
+import { createTeamsWebhookServer } from "./server.js";
+
+function resolveMcpLaunch(): { command: string; args: string[] } {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const mcpEntry = resolve(here, "../../mcp-server/src/index.ts");
+  const tsxBin = resolve(here, "../../../node_modules/.bin/tsx");
+  return { command: tsxBin, args: [mcpEntry] };
+}
+
+export async function startTeamsWebhookCli(
+  env: NodeJS.ProcessEnv,
+): Promise<{ server: Server; shutdown: () => Promise<void> }> {
+  const config = loadConfig({ ...env, REQUIRE_TEAMS: "true" });
+  const pool = createPool(config.databaseUrl);
+  await migrate(pool);
+
+  const logger = createLogger({ component: "teams-webhook" });
+  const messenger = createHttpTeamsMessenger({
+    appId: config.teams.botAppId,
+    password: config.teams.botPassword,
+  });
+
+  const { command: mcpServerCommand, args: mcpServerArgs } = resolveMcpLaunch();
+
+  const buildReviewDeps = async (_prUrl: string): Promise<ReviewDeps> => {
+    return {
+      config,
+      requireDb: true,
+      claudeCliPath: config.claudeCliPath,
+      mcpServerCommand,
+      mcpServerArgs,
+      getPrBranches: async (url) => {
+        if (!config.githubToken) {
+          throw new Error(
+            "GITHUB_TOKEN is required to resolve pull request branches",
+          );
+        }
+        return resolvePrBranchesViaGithub(url, { token: config.githubToken });
+      },
+      listRemoteBranches: async (repoPath) => {
+        const { stdout } = await execa("git", ["branch", "-r"], {
+          cwd: repoPath,
+        });
+        return stdout
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean);
+      },
+    };
+  };
+
+  const worker = createReviewWorker({
+    pool,
+    config,
+    messenger,
+    runReview,
+    buildReviewDeps,
+    logger,
+  });
+
+  const server = createTeamsWebhookServer({
+    secret: config.teams.webhookSecret,
+    worker,
+    logger,
+  });
+
+  const shutdown = async (): Promise<void> => {
+    try {
+      await worker.drain();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.warn("worker drain failed during shutdown", { err: message });
+    }
+    await new Promise<void>((resolve, reject) => {
+      server.close((err) => (err ? reject(err) : resolve()));
+    });
+    await pool.end();
+  };
+
+  await new Promise<void>((resolve, reject) => {
+    server.listen(config.teams.port, () => {
+      logger.info("teams webhook listening", { port: config.teams.port });
+      resolve();
+    });
+    server.on("error", reject);
+  });
+
+  return { server, shutdown };
+}
+
+async function main(): Promise<void> {
+  const { shutdown } = await startTeamsWebhookCli(process.env);
+
+  const onSignal = () => {
+    void shutdown()
+      .then(() => process.exit(0))
+      .catch((err) => {
+        console.error(err);
+        process.exit(1);
+      });
+  };
+
+  process.on("SIGINT", onSignal);
+  process.on("SIGTERM", onSignal);
+}
+
+const entry = process.argv[1]
+  ? pathToFileURL(process.argv[1]).href
+  : undefined;
+if (entry && import.meta.url === entry) {
+  main().catch((err) => {
+    console.error(err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
+}

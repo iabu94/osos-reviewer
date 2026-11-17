@@ -10,7 +10,9 @@
     "smoke:phase2": "bash ./scripts/smoke-phase2.sh",
     "smoke:phase3": "bash ./scripts/smoke-phase3.sh",
     "smoke:phase4": "bash ./scripts/smoke-phase4.sh",
-    "smoke:phase5": "bash ./scripts/smoke-phase5.sh"
+    "smoke:phase5": "bash ./scripts/smoke-phase5.sh",
+    "smoke:phase6": "bash ./scripts/smoke-phase6.sh",
+    "bench:phase6": "bash ./scripts/bench-phase6.sh"
   },
   "engines": {
     "node": ">=22"

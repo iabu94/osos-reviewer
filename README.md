@@ -165,6 +165,32 @@ Teams Adaptive Card delivery is deferred to Phase 6. If a real `claude` binary i
 
 **Smoke test:** `pnpm smoke:phase5` (or `./scripts/smoke-phase5.sh`) runs `@review/orchestrator` tests with fake Claude fixtures.
 
+## Phase 6 — Microsoft Teams webhook
+
+Teams messages that mention **ReviewBot** and include a GitHub pull request URL trigger an asynchronous review. The HTTP server (`@review/teams`) exposes:
+
+| Route | Response |
+|-------|-----------|
+| `POST /hooks/teams` | `202` `{ reviewId, duplicated, status: "accepted" }` after enqueue |
+| `GET /healthz` | `200` `{ ok: true }` |
+
+**Authentication:** POST bodies are authenticated with HMAC-SHA256 in the `x-review-signature` header (`sha256=<hex>` of the raw body, keyed by `TEAMS_WEBHOOK_SECRET`). Invalid signatures return `401` `{ error: "unauthorized" }`. Parse/validation failures return `400` with `error` (code) and `message`. This is a lightweight shared-secret check — not full Microsoft Bot Framework JWT validation (a future hardening step).
+
+**Environment (set `REQUIRE_TEAMS=true` for `pnpm --filter @review/teams start`):**
+
+| Variable | Role |
+|----------|------|
+| `TEAMS_WEBHOOK_SECRET` | HMAC secret for inbound webhooks |
+| `TEAMS_BOT_APP_ID` / `TEAMS_BOT_PASSWORD` | Bot Connector OAuth for Adaptive Card replies |
+| `TEAMS_WEBHOOK_PORT` | Listen port (default `3080`) |
+| `GITHUB_TOKEN` | Resolves PR head/base branches via GitHub API |
+| `MAX_CONCURRENT_REVIEWS` | Worker concurrency (default `2`) |
+| `REVIEW_RETRY_MAX` | Retries for retryable failures (e.g. Teams delivery) |
+
+**Behavior:** The webhook returns **202 immediately**; the in-process worker runs `runReview`, builds an Adaptive Card (completed summary/findings, failed state, or `NO_FINDINGS_SUMMARY`), and posts it to the originating thread via Bot Connector. **Idempotency** uses Teams activity id or a hash of conversation + PR URL (`reviews.idempotency_key`); duplicate terminal reviews return `duplicated: true` without re-running. **Concurrency** is enforced in the worker with a semaphore (`MAX_CONCURRENT_REVIEWS`).
+
+**Smoke / bench:** `pnpm smoke:phase6` runs package tests plus a signed fixture POST to an ephemeral server (prints `Phase 6 smoke OK`). `pnpm bench:phase6` runs one worker job with a fake `runReview` (diagnostics only) and writes `bench-phase6-out.json` (exits `0`; warns if wall clock > 30s).
+
 ## Packages
 
 | Package | Role |
@@ -176,6 +202,7 @@ Teams Adaptive Card delivery is deferred to Phase 6. If a real `claude` binary i
 | `@review/knowledge` | Knowledge-base discovery, chunking, embeddings, ingest, retrieval |
 | `@review/mcp-server` | MCP tools over stdio: integration, impact, reusability, and coding standards |
 | `@review/orchestrator` | Review lifecycle + CLI |
+| `@review/teams` | Teams webhook, Adaptive Cards, Bot Connector client |
 
 ## Spec & plan
 

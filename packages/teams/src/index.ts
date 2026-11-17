@@ -20,3 +20,9 @@ export {
   createHttpTeamsMessenger,
   type TeamsMessenger,
 } from "./messenger.js";
+export {
+  createTeamsWebhookServer,
+  type CreateTeamsWebhookServerOpts,
+  type TeamsWebhookWorker,
+  type TeamsWebhookEnqueueInput,
+} from "./server.js";
