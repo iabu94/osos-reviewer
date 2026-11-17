@@ -18,3 +18,4 @@ export { cleanupPrIndex } from "./cleanup.js";
 export { lookupRelationships, lookupSymbols } from "./retrieve.js";
 export { httpContractKey, normalizeRoutePath } from "./normalize-route.js";
 export { mergePreferPr } from "./merge-scope.js";
+export { traceFeBeIntegration } from "./trace-integration.js";
