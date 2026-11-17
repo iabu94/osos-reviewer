@@ -75,6 +75,12 @@ describeWithDatabase("retrieve", () => {
     expect(baseline).toEqual([]);
   });
 
+  it("pr scope without reviewId returns no rows from any review or baseline", async () => {
+    expect(await lookupSymbols({ pool, indexScope: "pr" })).toEqual([]);
+    expect(await lookupSymbols({ pool, indexScope: "pr", nameContains: "Orders" })).toEqual([]);
+    expect(await lookupRelationships({ pool, indexScope: "pr" })).toEqual([]);
+  });
+
   it("filters by repo, type, file path; returns mapped records", async () => {
     const [dto] = await lookupSymbols({ pool, repoIds: ["be"], symbolTypes: ["dto"], indexScope: "baseline" });
     expect(dto).toMatchObject({

@@ -76,6 +76,9 @@ export async function lookupSymbols(opts: {
   commitSha?: string;
   limit?: number;
 }): Promise<CodeSymbolRecord[]> {
+  if (opts.indexScope === "pr" && opts.reviewId === undefined) {
+    return [];
+  }
   if (
     opts.repoIds?.length === 0 ||
     opts.symbolTypes?.length === 0 ||
@@ -146,6 +149,9 @@ export async function lookupRelationships(opts: {
   reviewId?: string;
   limit?: number;
 }): Promise<CodeRelationshipRecord[]> {
+  if (opts.indexScope === "pr" && opts.reviewId === undefined) {
+    return [];
+  }
   if (opts.repoIds?.length === 0 || opts.relationshipTypes?.length === 0) {
     return [];
   }

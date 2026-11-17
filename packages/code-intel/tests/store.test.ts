@@ -230,5 +230,45 @@ describeWithDatabase("code store", () => {
         await rm(root, { recursive: true, force: true });
       }
     });
+
+    it("clears stale symbols when a file becomes unparseable", async () => {
+      const root = await mkdtemp(join(tmpdir(), "code-intel-stale-"));
+      try {
+        await mkdir(join(root, "src"), { recursive: true });
+        const { readFile } = await import("node:fs/promises");
+        const dto = await readFile(join(fixtureDotnetRoot, "OrderDto.cs"), "utf8");
+        await writeFile(join(root, "src", "OrderDto.cs"), dto);
+        const opts = {
+          pool,
+          repo: repo(root),
+          commitSha: "sha1",
+          branchTag: "develop",
+          rootDir: root,
+        };
+        await indexBaseline(opts);
+        expect(
+          (
+            await pool.query(
+              "SELECT count(*)::int AS n FROM code_symbols WHERE file_path = $1",
+              ["src/OrderDto.cs"],
+            )
+          ).rows[0].n,
+        ).toBeGreaterThan(0);
+
+        await writeFile(join(root, "src", "OrderDto.cs"), "public class OrderDto { void M( { ]]] ");
+        const report = await indexBaseline({ ...opts, commitSha: "sha2" });
+        expect(report.filesFailed).toBeGreaterThanOrEqual(1);
+        expect(
+          (
+            await pool.query(
+              "SELECT count(*)::int AS n FROM code_symbols WHERE file_path = $1",
+              ["src/OrderDto.cs"],
+            )
+          ).rows[0].n,
+        ).toBe(0);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    });
   });
 });

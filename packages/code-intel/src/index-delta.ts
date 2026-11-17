@@ -100,9 +100,18 @@ export async function indexPrDelta(opts: {
     report.filesParsed += 1;
     if (parsed.errors.length > 0) {
       report.filesFailed += 1;
-      if (parsed.symbols.length === 0) {
-        continue;
-      }
+    }
+    if (parsed.symbols.length === 0) {
+      await replaceFileSymbols({
+        ...scope,
+        commitSha: opts.commitSha,
+        branchTag: opts.branchTag,
+        filePath,
+        contentHash,
+        symbols: [],
+        relationships: [],
+      });
+      continue;
     }
 
     const embedding = opts.embedder

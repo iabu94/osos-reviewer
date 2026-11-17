@@ -200,6 +200,31 @@ describeWithDatabase("indexPrDelta", () => {
     expect((await lookupSymbols({ pool, indexScope: "pr", reviewId: "rev-2" })).length).toBeGreaterThan(0);
   });
 
+  it("clears stale PR symbols when a changed file becomes unparseable", async () => {
+    const root = await prRoot();
+    await indexPrDelta({
+      ...deltaOpts(root),
+      listChangedFiles: async () => ({ addedOrModified: [controllerPath], deleted: [] }),
+    });
+    expect(
+      (await lookupSymbols({ pool, indexScope: "pr", reviewId: "rev-1", filePaths: [controllerPath] }))
+        .length,
+    ).toBeGreaterThan(0);
+
+    await writeFile(join(root, controllerPath), "public class Broken { void M( { ]]] ");
+    const report = await indexPrDelta({
+      ...deltaOpts(root),
+      listChangedFiles: async () => ({ addedOrModified: [controllerPath], deleted: [] }),
+    });
+    expect(report.filesFailed).toBeGreaterThanOrEqual(1);
+    expect(
+      await lookupSymbols({ pool, indexScope: "pr", reviewId: "rev-1", filePaths: [controllerPath] }),
+    ).toEqual([]);
+    expect(
+      (await lookupSymbols({ pool, indexScope: "baseline", filePaths: [controllerPath] })).length,
+    ).toBeGreaterThan(0);
+  });
+
   it("uses git-manager listChangedFiles by default (called with worktree + target)", async () => {
     const root = await prRoot();
     await mkdir(join(root, "x"), { recursive: true });
