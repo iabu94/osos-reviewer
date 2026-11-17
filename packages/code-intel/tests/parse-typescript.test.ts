@@ -59,6 +59,17 @@ describe("parseTypeScriptFile", () => {
     expect(signals).toEqual(expect.arrayContaining(["OrderListComponent.orders", "OrderListComponent.pageSize", "OrderListComponent.refreshed"]));
   });
 
+  it("dto/interface metadata includes property names", () => {
+    const model = parseTypeScriptFile({
+      filePath: "order.model.ts",
+      sourceText: readFixture("angular/order.model.ts"),
+    });
+    const iface = model.symbols.find((s) => s.symbolType === "interface" && s.symbolName === "OrderDto");
+    expect(iface?.metadata?.properties).toEqual(
+      expect.arrayContaining(["id", "customerName", "total"]),
+    );
+  });
+
   it("reports no errors for empty input", () => {
     const r = parseTypeScriptFile({ filePath: "x.ts", sourceText: "" });
     expect(r).toEqual({ symbols: [], relationships: [], errors: [] });

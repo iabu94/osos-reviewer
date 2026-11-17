@@ -124,6 +124,45 @@ export interface CodeSymbolRecord {
   contentHash: string;
 }
 
+export type IntegrationMismatchKind =
+  | "missing_backend"
+  | "missing_frontend"
+  | "method_mismatch"
+  | "shape_mismatch";
+
+export interface SymbolEvidence {
+  repo: string;
+  symbolName: string;
+  symbolType: SymbolType;
+  filePath: string;
+  lineStart: number | null;
+  lineEnd: number | null;
+  signature: string;
+}
+
+export interface IntegrationMismatch {
+  kind: IntegrationMismatchKind;
+  summary: string;
+  frontend?: SymbolEvidence;
+  backend?: SymbolEvidence;
+  detail?: {
+    httpMethod?: string;
+    path?: string;
+    frontendProperties?: string[];
+    backendProperties?: string[];
+  };
+}
+
+export type ImpactedSymbol = SymbolEvidence & {
+  via: RelationshipType | "seed";
+  depth: number;
+};
+
+export type ReusabilityCandidate = SymbolEvidence & {
+  score: number;
+  explanation: string;
+};
+
 export interface CodeRelationshipRecord {
   id: number;
   repo: string;

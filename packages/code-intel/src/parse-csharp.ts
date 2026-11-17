@@ -144,13 +144,20 @@ export function parseCSharpFile(opts: { filePath: string; sourceText: string }):
         emitSymbol(m, "service_method", `${name}.${methodName}`, { className: name });
       }
     } else if (isRecord || name.endsWith("Dto")) {
-      emitSymbol(node, "dto", name, { kind: isRecord ? "record" : "class" });
+      const properties = dtoPropertiesOf(node, isRecord, members);
+      emitSymbol(node, "dto", name, {
+        kind: isRecord ? "record" : "class",
+        properties,
+      });
     } else {
       const keys = keyPropertiesOf(name, members);
       if (keys.length > 0) {
         emitSymbol(node, "entity", name, { keys });
       } else if (/models/i.test(filePath)) {
-        emitSymbol(node, "dto", name, { kind: "class" });
+        emitSymbol(node, "dto", name, {
+          kind: "class",
+          properties: dtoPropertiesOf(node, false, members),
+        });
       }
     }
 
@@ -297,6 +304,29 @@ function baseTypesOf(node: Node): TypeRef[] {
     if (ref) out.push(ref);
   }
   return out;
+}
+
+function dtoPropertiesOf(node: Node, isRecord: boolean, members: Node[]): string[] {
+  if (isRecord) {
+    const params =
+      node.childForFieldName("parameter_list") ??
+      node.namedChildren.find((c) => c.type === "parameter_list");
+    if (!params) return [];
+    const names: string[] = [];
+    for (const child of params.namedChildren) {
+      if (child.type !== "parameter") continue;
+      const id = child.childForFieldName("name");
+      if (id) names.push(id.text);
+    }
+    return names;
+  }
+  const names: string[] = [];
+  for (const m of members) {
+    if (m.type !== "property_declaration" || !hasModifier(m, "public")) continue;
+    const propName = m.childForFieldName("name")?.text;
+    if (propName) names.push(propName);
+  }
+  return names;
 }
 
 function keyPropertiesOf(className: string, members: Node[]): string[] {

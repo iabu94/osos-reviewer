@@ -66,6 +66,15 @@ describe("parseCSharpFile", () => {
     expect(dtos).toEqual(["OrderDto", "OrderSummaryDto"]);
   });
 
+  it("dto/interface metadata includes property names", () => {
+    const result = parseCSharpFile({
+      filePath: "Models/OrderDto.cs",
+      sourceText: readFixture("dotnet/OrderDto.cs"),
+    });
+    const dto = result.symbols.find((s) => s.symbolType === "dto" && s.symbolName === "OrderDto");
+    expect(dto?.metadata?.properties).toEqual(expect.arrayContaining(["Id", "CustomerId", "Total"]));
+  });
+
   it("parses service public methods only", () => {
     const result = parseCSharpFile({
       filePath: "OrderService.cs",

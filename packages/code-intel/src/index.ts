@@ -16,3 +16,5 @@ export { indexPrDelta } from "./index-delta.js";
 export type { DeltaIndexReport, ListChangedFiles } from "./index-delta.js";
 export { cleanupPrIndex } from "./cleanup.js";
 export { lookupRelationships, lookupSymbols } from "./retrieve.js";
+export { httpContractKey, normalizeRoutePath } from "./normalize-route.js";
+export { mergePreferPr } from "./merge-scope.js";

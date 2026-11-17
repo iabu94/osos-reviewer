@@ -38,6 +38,7 @@ export function parseTypeScriptFile(opts: { filePath: string; sourceText: string
       return;
     }
     if (ts.isInterfaceDeclaration(node) && hasExport(node)) {
+      const properties = interfacePropertyNames(node);
       symbols.push({
         symbolType: "interface",
         symbolName: node.name.text,
@@ -45,11 +46,22 @@ export function parseTypeScriptFile(opts: { filePath: string; sourceText: string
         lineStart: lineOf(node.getStart(sf)),
         lineEnd: lineOf(node.getEnd()),
         signature: header(node),
-        metadata: { members: node.members.length },
+        metadata: { members: properties.length, properties },
       });
     }
     ts.forEachChild(node, visit);
   };
+
+  function interfacePropertyNames(node: ts.InterfaceDeclaration): string[] {
+    const names: string[] = [];
+    for (const member of node.members) {
+      if (!ts.isPropertySignature(member) || !member.name) continue;
+      if (ts.isIdentifier(member.name) || ts.isStringLiteral(member.name)) {
+        names.push(member.name.text);
+      }
+    }
+    return names;
+  }
 
   function hasExport(node: ts.Node): boolean {
     return (ts.canHaveModifiers(node) ? (ts.getModifiers(node) ?? []) : []).some(
