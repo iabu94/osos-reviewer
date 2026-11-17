@@ -1,10 +1,13 @@
 import type { EmbeddingProvider } from "@review/knowledge";
 import type {
+  CodeSymbolRecord,
   IndexScope,
   ReusabilityCandidate,
   SymbolType,
 } from "@review/shared";
 import type { Pool } from "pg";
+
+import { mergePreferPr } from "./merge-scope.js";
 
 const DEFAULT_LIMIT = 5;
 const MAX_LIMIT = 10;
@@ -47,13 +50,24 @@ class Where {
     }
   }
 
+  addMergedReviewScope(reviewId: string): void {
+    this.params.push(reviewId);
+    const rid = `$${this.params.length}`;
+    this.clauses.push(
+      `((index_scope = 'pr' AND review_id = ${rid}) OR (index_scope = 'baseline' AND review_id IS NULL))`,
+    );
+  }
+
   sql(): string {
     return this.clauses.length ? `WHERE ${this.clauses.join(" AND ")}` : "";
   }
 }
 
 interface SymbolRow {
+  id: string;
   repo: string;
+  index_scope: IndexScope;
+  review_id: string | null;
   symbol_type: SymbolType;
   symbol_name: string;
   file_path: string;
@@ -61,6 +75,39 @@ interface SymbolRow {
   line_end: number | null;
   signature: string;
   distance: number;
+}
+
+function rowToRecord(row: Omit<SymbolRow, "distance">): CodeSymbolRecord {
+  return {
+    id: Number(row.id),
+    repo: row.repo,
+    revision: "",
+    branchTag: null,
+    indexScope: row.index_scope,
+    reviewId: row.review_id,
+    symbolType: row.symbol_type,
+    symbolName: row.symbol_name,
+    filePath: row.file_path,
+    lineStart: row.line_start,
+    lineEnd: row.line_end,
+    signature: row.signature,
+    summary: null,
+    metadata: {},
+    commitSha: "",
+    contentHash: "",
+  };
+}
+
+const SYMBOL_SELECT =
+  "id, repo, index_scope, review_id, symbol_type, symbol_name, file_path, line_start, line_end, signature";
+
+function mergeSimilarityRows(rows: SymbolRow[], limit: number): SymbolRow[] {
+  const merged = mergePreferPr(rows.map((row) => rowToRecord(row)));
+  const keepIds = new Set(merged.map((r) => r.id));
+  return rows
+    .filter((row) => keepIds.has(Number(row.id)))
+    .sort((a, b) => Number(a.distance) - Number(b.distance))
+    .slice(0, limit);
 }
 
 function mapCandidate(
@@ -100,18 +147,24 @@ async function findByNameMatch(
   const nameParam = `$${where.params.length - 1}`;
   const sigParam = `$${where.params.length}`;
   where.clauses.push(`(symbol_name ILIKE ${nameParam} OR signature ILIKE ${sigParam})`);
-  where.params.push(limit);
-  const limitParam = `$${where.params.length}`;
+  const fetchLimit = limit * 4;
+  where.params.push(fetchLimit);
+  const fetchLimitParam = `$${where.params.length}`;
 
   const result = await pool.query<SymbolRow>(
-    `SELECT repo, symbol_type, symbol_name, file_path, line_start, line_end, signature
+    `SELECT ${SYMBOL_SELECT}
      FROM code_symbols ${where.sql()}
      ORDER BY repo, file_path, line_start NULLS LAST, symbol_name
-     LIMIT ${limitParam}`,
+     LIMIT ${fetchLimitParam}`,
     where.params,
   );
 
-  return result.rows.map((row) => mapCandidate(row, NAME_FALLBACK_SCORE, NAME_EXPLANATION));
+  const merged = mergePreferPr(result.rows.map((row) => rowToRecord(row)));
+  const keepIds = new Set(merged.map((r) => r.id));
+  return result.rows
+    .filter((row) => keepIds.has(Number(row.id)))
+    .slice(0, limit)
+    .map((row) => mapCandidate(row, NAME_FALLBACK_SCORE, NAME_EXPLANATION));
 }
 
 export async function findSimilarSymbols(opts: {
@@ -139,7 +192,11 @@ export async function findSimilarSymbols(opts: {
   const where = new Where();
   if (opts.repoIds) where.add("repo = ANY(?::text[])", opts.repoIds);
   if (opts.symbolTypes) where.add("symbol_type = ANY(?::text[])", opts.symbolTypes);
-  where.addScope(opts.indexScope, opts.reviewId);
+  if (opts.reviewId !== undefined) {
+    where.addMergedReviewScope(opts.reviewId);
+  } else {
+    where.addScope(opts.indexScope, opts.reviewId);
+  }
 
   const embeddedWhere = cloneWhere(where);
   embeddedWhere.clauses.push("embedding IS NOT NULL");
@@ -157,20 +214,21 @@ export async function findSimilarSymbols(opts: {
   const [embedding] = await opts.embedder.embed([trimmed]);
   const vector = `[${embedding.join(",")}]`;
   const queryWhere = cloneWhere(embeddedWhere);
-  queryWhere.params.push(vector, limit);
+  const fetchLimit = limit * 4;
+  queryWhere.params.push(vector, fetchLimit);
   const vecParam = `$${queryWhere.params.length - 1}`;
   const limitParam = `$${queryWhere.params.length}`;
 
   const result = await opts.pool.query<SymbolRow>(
-    `SELECT repo, symbol_type, symbol_name, file_path, line_start, line_end,
-            signature, embedding <=> ${vecParam}::vector AS distance
+    `SELECT ${SYMBOL_SELECT}, embedding <=> ${vecParam}::vector AS distance
      FROM code_symbols ${embeddedWhere.sql()}
      ORDER BY embedding <=> ${vecParam}::vector ASC
      LIMIT ${limitParam}`,
     queryWhere.params,
   );
 
-  return result.rows.map((row) =>
+  const deduped = mergeSimilarityRows(result.rows, limit);
+  return deduped.map((row) =>
     mapCandidate(row, 1 / (1 + Number(row.distance)), VECTOR_EXPLANATION),
   );
 }

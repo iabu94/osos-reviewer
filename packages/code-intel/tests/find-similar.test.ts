@@ -111,6 +111,52 @@ describeWithDatabase("findSimilarSymbols", () => {
     expect(hits[0]?.symbolName).toBe("OrderService");
   });
 
+  it("merges baseline and PR scope when reviewId is set", async () => {
+    const filePath = "svc.ts";
+    const vectors = await embedSymbols(fake, [sym("SharedSvc", filePath, "baseline impl")]);
+    await replaceFileSymbols({
+      pool,
+      repo: "be",
+      indexScope: "baseline",
+      reviewId: null,
+      commitSha: "sha-base",
+      branchTag: null,
+      filePath,
+      contentHash: "h-base",
+      symbols: [sym("SharedSvc", filePath, "baseline impl")],
+      relationships: [],
+      embedding: vectors,
+    });
+    const prVectors = await embedSymbols(fake, [sym("SharedSvc", filePath, "pr impl revised")]);
+    await replaceFileSymbols({
+      pool,
+      repo: "be",
+      indexScope: "pr",
+      reviewId: "rev-merge",
+      commitSha: "sha-pr",
+      branchTag: null,
+      filePath,
+      contentHash: "h-pr",
+      symbols: [sym("SharedSvc", filePath, "pr impl revised")],
+      relationships: [],
+      embedding: prVectors,
+    });
+
+    const hits = await findSimilarSymbols({
+      pool,
+      embedder: fake,
+      query: "pr impl revised",
+      repoIds: ["be"],
+      reviewId: "rev-merge",
+      limit: 5,
+    });
+
+    expect(hits.some((h) => h.symbolName === "SharedSvc" && h.signature === "pr impl revised")).toBe(
+      true,
+    );
+    expect(hits.some((h) => h.signature === "baseline impl")).toBe(false);
+  });
+
   it("returns empty for pr scope without reviewId", async () => {
     await replaceFileSymbols({
       pool,

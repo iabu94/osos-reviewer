@@ -70,6 +70,8 @@ export async function lookupSymbols(opts: {
   repoIds?: string[];
   symbolTypes?: SymbolType[];
   nameContains?: string;
+  symbolNameEquals?: string;
+  symbolNameEqualsCi?: string;
   filePaths?: string[];
   indexScope?: IndexScope;
   reviewId?: string;
@@ -92,6 +94,12 @@ export async function lookupSymbols(opts: {
   if (opts.filePaths) where.add("file_path = ANY(?::text[])", opts.filePaths);
   if (opts.nameContains) {
     where.add("symbol_name ILIKE ?", `%${escapeLike(opts.nameContains)}%`);
+  }
+  if (opts.symbolNameEquals) {
+    where.add("symbol_name = ?", opts.symbolNameEquals);
+  }
+  if (opts.symbolNameEqualsCi) {
+    where.add("symbol_name ILIKE ?", escapeLike(opts.symbolNameEqualsCi));
   }
   if (opts.commitSha) where.add("commit_sha = ?", opts.commitSha);
   where.addScope(opts.indexScope, opts.reviewId);

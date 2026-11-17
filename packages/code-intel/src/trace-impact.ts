@@ -79,7 +79,35 @@ async function loadScopeSymbols(opts: TraceOpts): Promise<CodeSymbolRecord[]> {
       reviewId: opts.reviewId,
     });
     const baseline = await lookupSymbols({ ...base, indexScope: "baseline" });
-    return [...pr, ...baseline];
+    return mergePreferPr([...pr, ...baseline]);
+  }
+  if (opts.indexScope) {
+    return lookupSymbols({
+      ...base,
+      indexScope: opts.indexScope,
+      reviewId: opts.indexScope === "pr" ? opts.reviewId : undefined,
+    });
+  }
+  return lookupSymbols(base);
+}
+
+async function lookupInScope(
+  opts: TraceOpts,
+  nameFilter: {
+    symbolNameEquals?: string;
+    symbolNameEqualsCi?: string;
+    nameContains?: string;
+  },
+): Promise<CodeSymbolRecord[]> {
+  const base = { ...scopeBase(opts), ...nameFilter };
+  if (opts.reviewId) {
+    const pr = await lookupSymbols({
+      ...base,
+      indexScope: "pr",
+      reviewId: opts.reviewId,
+    });
+    const baseline = await lookupSymbols({ ...base, indexScope: "baseline" });
+    return mergePreferPr([...pr, ...baseline]);
   }
   if (opts.indexScope) {
     return lookupSymbols({
@@ -95,36 +123,15 @@ async function lookupByNameContains(
   opts: TraceOpts,
   nameContains: string,
 ): Promise<CodeSymbolRecord[]> {
-  const base = { ...scopeBase(opts), nameContains };
-  if (opts.reviewId) {
-    const pr = await lookupSymbols({
-      ...base,
-      indexScope: "pr",
-      reviewId: opts.reviewId,
-    });
-    const baseline = await lookupSymbols({ ...base, indexScope: "baseline" });
-    return [...pr, ...baseline];
-  }
-  if (opts.indexScope) {
-    return lookupSymbols({
-      ...base,
-      indexScope: opts.indexScope,
-      reviewId: opts.indexScope === "pr" ? opts.reviewId : undefined,
-    });
-  }
-  return lookupSymbols(base);
-}
-
-function filterSeedMatches(rows: CodeSymbolRecord[], symbolName: string): CodeSymbolRecord[] {
-  const exact = rows.filter((s) => s.symbolName === symbolName);
-  if (exact.length > 0) return exact;
-  const lower = symbolName.toLowerCase();
-  return rows.filter((s) => s.symbolName.toLowerCase() === lower);
+  return lookupInScope(opts, { nameContains });
 }
 
 async function findSeedSymbols(opts: TraceOpts): Promise<CodeSymbolRecord[]> {
-  const candidates = await lookupByNameContains(opts, opts.symbolName);
-  return mergePreferPr(filterSeedMatches(candidates, opts.symbolName));
+  let seeds = await lookupInScope(opts, { symbolNameEquals: opts.symbolName });
+  if (seeds.length === 0) {
+    seeds = await lookupInScope(opts, { symbolNameEqualsCi: opts.symbolName });
+  }
+  return seeds;
 }
 
 function resolveByExactName(

@@ -68,6 +68,33 @@ describeWithDatabase("traceSymbolImpact", () => {
     expect(impacted.some((i) => i.symbolName.includes("Orders") || i.filePath.includes("Orders"))).toBe(true);
   });
 
+  it("does not seed trace from substring-only name matches", async () => {
+    await replaceFileSymbols({
+      pool,
+      repo: "be",
+      indexScope: "baseline",
+      reviewId: null,
+      commitSha: "sha-base",
+      branchTag: null,
+      filePath: "wrap.ts",
+      contentHash: "h-wrap",
+      symbols: [
+        {
+          symbolType: "service",
+          symbolName: "MyOrdersControllerHelper",
+          filePath: "wrap.ts",
+          lineStart: 1,
+          lineEnd: 5,
+          signature: "helper",
+        },
+      ],
+      relationships: [],
+    });
+    expect(
+      await traceSymbolImpact({ pool, symbolName: "OrdersController", repoIds: ["be"], maxDepth: 0 }),
+    ).toEqual([]);
+  });
+
   it("returns empty array for unknown symbol", async () => {
     expect(await traceSymbolImpact({ pool, symbolName: "DoesNotExist_ZZZ" })).toEqual([]);
   });
