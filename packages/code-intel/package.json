@@ -19,6 +19,8 @@
   },
   "dependencies": {
     "@review/shared": "workspace:*",
+    "tree-sitter": "0.21.1",
+    "tree-sitter-c-sharp": "0.23.1",
     "typescript": "^5.7.2"
   },
   "devDependencies": {
