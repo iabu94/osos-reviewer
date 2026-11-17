@@ -177,6 +177,9 @@ importers:
       '@review/shared':
         specifier: workspace:*
         version: link:../shared
+      '@review/teams':
+        specifier: workspace:*
+        version: link:../teams
       execa:
         specifier: ^9.5.2
         version: 9.6.1

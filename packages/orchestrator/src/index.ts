@@ -7,3 +7,7 @@ export {
 } from "./review-schema.js";
 export { runReview, parsePrUrl } from "./review.js";
 export type { ReviewDeps, PrBranches } from "./review.js";
+export { resolvePrBranchesViaGithub } from "./github-pr.js";
+export { createLogger } from "./log.js";
+export { createReviewWorker } from "./worker.js";
+export type { ReviewWorker, ReviewWorkerDeps, EnqueueInput } from "./worker.js";
