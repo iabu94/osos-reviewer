@@ -15,16 +15,22 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "index-baseline": "tsx src/cli.ts"
   },
   "dependencies": {
+    "@review/db": "workspace:*",
+    "@review/knowledge": "workspace:*",
     "@review/shared": "workspace:*",
+    "pg": "^8.13.1",
     "tree-sitter": "0.21.1",
     "tree-sitter-c-sharp": "0.23.1",
     "typescript": "^5.7.2"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.19.2",
     "vitest": "^2.1.8"
   }
 }
