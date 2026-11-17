@@ -85,6 +85,28 @@ describe("discoverDocuments", () => {
     expect(docs[0].title).toBe("Actual title");
   });
 
+  it("preserves a trailing hash when it is part of a heading", async () => {
+    const root = await createFixtureRoot();
+    await writeMarkdown(root, "architecture/dotnet.md", "# C#\n");
+
+    const docs = await discoverDocuments(root);
+
+    expect(docs[0].title).toBe("C#");
+  });
+
+  it("keeps a shorter fence inside a longer fence open", async () => {
+    const root = await createFixtureRoot();
+    await writeMarkdown(
+      root,
+      "security/fences.md",
+      "````md\n```\n# Not the title\n````\n\n# Actual title\n",
+    );
+
+    const docs = await discoverDocuments(root);
+
+    expect(docs[0].title).toBe("Actual title");
+  });
+
   it("ignores non-Markdown files and unknown top-level directories", async () => {
     const root = await createFixtureRoot();
     await writeMarkdown(root, "security/database/access.md", "# Access\n");

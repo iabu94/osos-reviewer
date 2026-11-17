@@ -29,7 +29,9 @@ function parseSections(markdown: string, title: string): MarkdownSection[] {
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
   const sections: MarkdownSection[] = [];
   let levelTwo: string | undefined;
-  let fenceCharacter: "`" | "~" | undefined;
+  let fence:
+    | { character: "`" | "~"; length: number }
+    | undefined;
   let current: MarkdownSection = {
     section: title,
     headings: [`# ${title}`],
@@ -43,22 +45,32 @@ function parseSections(markdown: string, title: string): MarkdownSection[] {
   };
 
   for (const line of lines) {
-    const fence = /^\s{0,3}(`{3,}|~{3,})/.exec(line);
+    const fenceMatch = /^\s{0,3}(`{3,}|~{3,})(.*)$/.exec(line);
     if (fence) {
-      const character = fence[1][0] as "`" | "~";
-      if (!fenceCharacter) {
-        fenceCharacter = character;
-      } else if (fenceCharacter === character) {
-        fenceCharacter = undefined;
+      if (
+        fenceMatch &&
+        fenceMatch[1][0] === fence.character &&
+        fenceMatch[1].length >= fence.length &&
+        fenceMatch[2].trim() === ""
+      ) {
+        fence = undefined;
       }
       current.body += `${line}\n`;
       continue;
     }
 
+    if (fenceMatch) {
+      fence = {
+        character: fenceMatch[1][0] as "`" | "~",
+        length: fenceMatch[1].length,
+      };
+      current.body += `${line}\n`;
+      continue;
+    }
+
     const titleHeading = /^#\s+/.test(line);
-    const heading = fenceCharacter
-      ? null
-      : /^\s{0,3}(##|###)\s+(.+?)\s*#*\s*$/.exec(line);
+    const heading =
+      /^\s{0,3}(##|###)\s+(.+?)(?:[ \t]+#+[ \t]*)?$/.exec(line);
     if (heading) {
       flush();
       const headingTitle = heading[2];
@@ -85,7 +97,7 @@ function parseSections(markdown: string, title: string): MarkdownSection[] {
       continue;
     }
 
-    if (fenceCharacter || !titleHeading) {
+    if (!titleHeading) {
       current.body += `${line}\n`;
     }
   }

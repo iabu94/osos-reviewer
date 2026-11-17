@@ -42,24 +42,34 @@ async function collectMarkdownFiles(directory: string): Promise<string[]> {
 }
 
 function readTitle(markdown: string, absolutePath: string): string {
-  let fenceCharacter: "`" | "~" | undefined;
+  let fence:
+    | { character: "`" | "~"; length: number }
+    | undefined;
   for (const line of markdown.split(/\r?\n/)) {
-    const fence = /^\s{0,3}(`{3,}|~{3,})/.exec(line);
+    const fenceMatch = /^\s{0,3}(`{3,}|~{3,})(.*)$/.exec(line);
     if (fence) {
-      const character = fence[1][0] as "`" | "~";
-      if (!fenceCharacter) {
-        fenceCharacter = character;
-      } else if (fenceCharacter === character) {
-        fenceCharacter = undefined;
+      if (
+        fenceMatch &&
+        fenceMatch[1][0] === fence.character &&
+        fenceMatch[1].length >= fence.length &&
+        fenceMatch[2].trim() === ""
+      ) {
+        fence = undefined;
       }
       continue;
     }
 
-    if (!fenceCharacter) {
-      const heading = /^\s{0,3}#\s+(.+?)\s*#*\s*$/.exec(line);
-      if (heading) {
-        return heading[1];
-      }
+    if (fenceMatch) {
+      fence = {
+        character: fenceMatch[1][0] as "`" | "~",
+        length: fenceMatch[1].length,
+      };
+      continue;
+    }
+
+    const heading = /^\s{0,3}#\s+(.+?)(?:[ \t]+#+[ \t]*)?$/.exec(line);
+    if (heading) {
+      return heading[1];
     }
   }
   return parse(absolutePath).name;

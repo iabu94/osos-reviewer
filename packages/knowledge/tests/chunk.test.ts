@@ -77,6 +77,37 @@ describe("chunkMarkdown", () => {
     expect(chunks[0].chunkText).toContain("## Not a section");
   });
 
+  it("preserves a trailing hash when it is part of a section heading", () => {
+    const chunks = chunkMarkdown(
+      "# Languages\n\n## F#\n\nUse discriminated unions.\n",
+      { ...meta, title: "Languages" },
+    );
+
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0].section).toBe("F#");
+    expect(chunks[0].chunkText).toContain("## F#");
+  });
+
+  it("keeps a shorter fence inside a longer fence open", () => {
+    const chunks = chunkMarkdown(
+      [
+        "# Components",
+        "",
+        "## Examples",
+        "",
+        "````md",
+        "```",
+        "## Not a section",
+        "````",
+      ].join("\n"),
+      meta,
+    );
+
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0].section).toBe("Examples");
+    expect(chunks[0].chunkText).toContain("## Not a section");
+  });
+
   it("soft-splits long sections on paragraph boundaries with context", () => {
     const paragraphs = Array.from(
       { length: 8 },
