@@ -16,6 +16,8 @@ import {
   resolveCompanionBranch,
 } from "@review/git-manager";
 import { createPool, healthCheck, migrate } from "@review/db";
+import { cleanupPrIndex, indexPrDelta } from "@review/code-intel";
+import { createEmbeddingProvider } from "@review/knowledge";
 import { runClaudeReview } from "./claude.js";
 
 const REVIEW_ID_RE = /^[A-Za-z0-9_-]+$/;
@@ -36,6 +38,9 @@ export type ReviewDeps = {
   listRemoteBranches: (repoPath: string) => Promise<string[]>;
   runClaude?: typeof runClaudeReview;
   dbHealth?: (databaseUrl: string) => Promise<{ ok: true; vector: boolean }>;
+  indexPrDelta?: typeof indexPrDelta;
+  cleanupPrIndex?: typeof cleanupPrIndex;
+  dbPoolFactory?: (url: string) => ReturnType<typeof createPool>;
 };
 
 export function parsePrUrl(prUrl: string): {
@@ -124,8 +129,26 @@ export async function runReview(
   const worktrees: string[] = [];
   const created: Array<{ repoPath: string; worktreePath: string }> = [];
   let claimedReviewDir: string | null = null;
+  let pool: ReturnType<typeof createPool> | null = null;
 
   const cleanup = async () => {
+    if (pool) {
+      const usedPool = pool;
+      pool = null;
+      try {
+        await (deps.cleanupPrIndex ?? cleanupPrIndex)(
+          usedPool,
+          request.reviewId,
+        );
+      } catch {
+        // best-effort
+      }
+      try {
+        await usedPool.end();
+      } catch {
+        // best-effort
+      }
+    }
     for (const wt of created) {
       try {
         await removeWorktree(wt);
@@ -259,6 +282,53 @@ export async function runReview(
       worktreePath: primaryWt.worktreePath,
       targetBranch: branches.targetBranch,
     });
+
+    if (deps.requireDb) {
+      pool = (deps.dbPoolFactory ?? createPool)(deps.config.databaseUrl);
+      const index = deps.indexPrDelta ?? indexPrDelta;
+      const embedder = createEmbeddingProvider(deps.config.embedding);
+      const targets = [
+        {
+          repo: primary,
+          worktreePath: primaryWt.worktreePath,
+          headSha: primaryWt.headSha,
+          branchTag: branches.primaryBranch,
+          targetBranch: branches.targetBranch,
+        },
+        {
+          repo: companion,
+          worktreePath: companionWt.worktreePath,
+          headSha: companionWt.headSha,
+          branchTag: companionResolution.branch,
+          targetBranch: companion.defaultBaseBranch,
+        },
+      ];
+      try {
+        for (const t of targets) {
+          await index({
+            pool,
+            repoId: t.repo.id,
+            reviewId: request.reviewId,
+            commitSha: t.headSha,
+            branchTag: t.branchTag,
+            rootDir: t.worktreePath,
+            worktreePath: t.worktreePath,
+            targetBranch: t.targetBranch,
+            role: t.repo.role,
+            embedder,
+          });
+        }
+      } catch (err) {
+        return {
+          reviewId: request.reviewId,
+          status: "failed",
+          error: {
+            code: "index_failed",
+            message: err instanceof Error ? err.message : String(err),
+          },
+        };
+      }
+    }
 
     const metadata: ReviewMetadata = {
       primaryRepoId: primary.id,

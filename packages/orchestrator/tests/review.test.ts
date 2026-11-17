@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { access, chmod, mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -199,5 +199,104 @@ describe("runReview", () => {
     expect(result.metadata?.companionUsedFallback).toBe(true);
     expect(result.metadata?.companionReason).toBe("no_ticket_branch");
     expect(result.metadata?.companionBranch).toBe("origin/develop");
+  });
+
+  function mockPoolDeps() {
+    const pool = { end: vi.fn(async () => undefined) };
+    const indexPrDelta = vi.fn(async () => ({
+      filesConsidered: 1,
+      filesParsed: 1,
+      filesDeleted: 0,
+      symbolsUpserted: 2,
+      filesFailed: 0,
+    }));
+    const cleanupPrIndex = vi.fn(async () => ({ symbolsDeleted: 2 }));
+    return {
+      pool,
+      indexPrDelta,
+      cleanupPrIndex,
+      dbPoolFactory: () => pool as never,
+      dbHealth: async () => ({ ok: true as const, vector: true }),
+    };
+  }
+
+  it("runs PR delta indexing and cleans up PR index", async () => {
+    const { config } = await setupPair();
+    const claude = await makeFakeClaude(`echo '{"ok":true}'`);
+    const mocks = mockPoolDeps();
+    const request = {
+      prUrl: "https://github.com/acme/backend/pull/6",
+      reviewId: "rev-index",
+    };
+    const result = await runReview(request, {
+      ...baseDeps(config, claude, "feature/ABC-123"),
+      requireDb: true,
+      ...mocks,
+    });
+
+    expect(result.status).toBe("completed");
+    expect(mocks.indexPrDelta).toHaveBeenCalledTimes(2);
+    const calls = mocks.indexPrDelta.mock.calls.map(
+      (c) => c[0] as Record<string, unknown>,
+    );
+    expect(calls.map((c) => c.repoId).sort()).toEqual(["be", "fe"]);
+    for (const c of calls) {
+      expect(c.reviewId).toBe(request.reviewId);
+      expect(c.rootDir).toBe(c.worktreePath);
+    }
+    expect(mocks.cleanupPrIndex).toHaveBeenCalledWith(
+      mocks.pool,
+      request.reviewId,
+    );
+    expect(mocks.pool.end).toHaveBeenCalled();
+  });
+
+  it("cleans up PR index when Claude fails", async () => {
+    const { config } = await setupPair();
+    const claude = await makeFakeClaude(`exit 1`);
+    const mocks = mockPoolDeps();
+    const result = await runReview(
+      {
+        prUrl: "https://github.com/acme/backend/pull/7",
+        reviewId: "rev-claude-fail",
+      },
+      {
+        ...baseDeps(config, claude, "feature/ABC-123"),
+        requireDb: true,
+        ...mocks,
+      },
+    );
+    expect(result.error?.code).toBe("claude_failed");
+    expect(mocks.cleanupPrIndex).toHaveBeenCalledWith(
+      mocks.pool,
+      "rev-claude-fail",
+    );
+  });
+
+  it("fails with index_failed and still cleans up", async () => {
+    const { config, worktreeRoot } = await setupPair();
+    const claude = await makeFakeClaude(`echo ok`);
+    const mocks = mockPoolDeps();
+    mocks.indexPrDelta.mockRejectedValueOnce(new Error("boom"));
+    const result = await runReview(
+      {
+        prUrl: "https://github.com/acme/backend/pull/8",
+        reviewId: "rev-index-fail",
+      },
+      {
+        ...baseDeps(config, claude, "feature/ABC-123"),
+        requireDb: true,
+        ...mocks,
+      },
+    );
+    expect(result.status).toBe("failed");
+    expect(result.error?.code).toBe("index_failed");
+    expect(mocks.cleanupPrIndex).toHaveBeenCalledWith(
+      mocks.pool,
+      "rev-index-fail",
+    );
+    await expect(
+      access(join(worktreeRoot, "rev-index-fail")),
+    ).rejects.toThrow();
   });
 });

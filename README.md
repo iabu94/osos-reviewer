@@ -106,6 +106,28 @@ pnpm test
 
 Only `get_coding_standards` is live. `trace_fe_be_integration`, `trace_symbol_impact`, and `check_reusability` remain Phase 1 stubs. The MCP server reads the same env vars lazily on the first standards call.
 
+## Phase 3: Code intelligence
+
+`@review/code-intel` indexes code symbols and relationships into Postgres (`code_symbols` plus relationship rows, pgvector embeddings) so later phases can answer cross-repo questions without re-reading whole trees.
+
+**Parsers**
+
+- **.NET backend (`.cs`)**: `tree-sitter` + `tree-sitter-c-sharp` (controllers, services, DTOs, DbContext, validators).
+- **Angular frontend (`.ts`)**: the TypeScript compiler API (components, services, interfaces/models).
+
+**Baseline index** (default branch; `index_scope = 'baseline'`). Unchanged files (by content hash) are skipped, stale symbols are replaced, and deleted files are removed:
+
+```bash
+pnpm --filter @review/code-intel index-baseline --repo-id be
+pnpm --filter @review/code-intel index-baseline --repo-id fe
+```
+
+**Delta on review.** When `REQUIRE_DB=true`, `runReview` indexes only the files changed on each PR branch (primary and companion worktrees) as `index_scope = 'pr'` rows tagged with the `reviewId`, after the focused diff and before Claude runs. Baseline rows are never modified. PR rows are always deleted in the lifecycle `finally` (even when Claude or indexing fails). An indexing error fails the review with `error.code = "index_failed"`.
+
+**Smoke test:** `pnpm smoke:phase3` (or `EMBEDDING_PROVIDER=fake ./scripts/smoke-phase3.sh`) runs the code-intel, git-manager, and orchestrator tests, then baseline-indexes the fixture trees into the test database.
+
+The MCP tools `trace_fe_be_integration`, `trace_symbol_impact`, and `check_reusability` are **still stubs**; consuming the index from MCP is Phase 4.
+
 ## Packages
 
 | Package | Role |
@@ -113,6 +135,7 @@ Only `get_coding_standards` is live. `trace_fe_be_integration`, `trace_symbol_im
 | `@review/shared` | Config + shared types/errors |
 | `@review/db` | Postgres pool, migrate, health |
 | `@review/git-manager` | Ticket/companion, worktrees, focused diff |
+| `@review/code-intel` | Tree-sitter/TypeScript symbol parsing, baseline + PR delta indexing, retrieval |
 | `@review/knowledge` | Knowledge-base discovery, chunking, embeddings, ingest, retrieval |
 | `@review/mcp-server` | MCP tools over stdio: live `get_coding_standards` + three Phase 1 stubs |
 | `@review/orchestrator` | Review lifecycle + CLI |
@@ -121,3 +144,4 @@ Only `get_coding_standards` is live. `trace_fe_be_integration`, `trace_symbol_im
 
 - Spec: `docs/superpowers/specs/2026-11-16-review-orchestrator-prd.md`
 - Phase 1 plan: `docs/superpowers/plans/2026-11-16-phase1-foundation.md`
+- Phase 3 plan: `docs/superpowers/plans/2026-11-17-phase3-code-intelligence.md`

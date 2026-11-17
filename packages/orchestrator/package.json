@@ -19,6 +19,8 @@
     "start": "tsx --env-file=../../.env src/cli.ts"
   },
   "dependencies": {
+    "@review/code-intel": "workspace:*",
+    "@review/knowledge": "workspace:*",
     "@review/db": "workspace:*",
     "@review/git-manager": "workspace:*",
     "@review/mcp-server": "workspace:*",
