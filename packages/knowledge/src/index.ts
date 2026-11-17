@@ -11,6 +11,7 @@ export {
 export type { EmbeddingProvider } from "./embed.js";
 export { ingestKnowledgeBase } from "./ingest.js";
 export type { IngestReport } from "./ingest.js";
+export { retrieveCodingStandards } from "./retrieve.js";
 export {
   deleteChunksForMissingPaths,
   deleteChunksNotIn,
