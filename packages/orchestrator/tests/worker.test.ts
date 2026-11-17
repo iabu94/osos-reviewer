@@ -5,6 +5,8 @@ import {
   createPool,
   ensureDatabase,
   getReviewByIdempotencyKey,
+  markReviewFinished,
+  markReviewRunning,
   migrate,
   resolveTestDatabaseUrl,
 } from "@review/db";
@@ -221,18 +223,32 @@ describeDb("createReviewWorker", () => {
   });
 
   it("duplicate on failed prior review does not reschedule", async () => {
+    const priorReviewId = "existing-failed";
     await claimReview(pool, {
-      reviewId: "existing-failed",
+      reviewId: priorReviewId,
       idempotencyKey: "dup-failed",
       prUrl,
       teamsConversationRef,
     });
+    await markReviewRunning(pool, priorReviewId);
+    await markReviewFinished(pool, priorReviewId, {
+      reviewId: priorReviewId,
+      status: "failed",
+      error: { code: "claude_timeout", message: "prior run" },
+    });
+
+    let runs = 0;
     const worker = createReviewWorker({
       pool,
       config: baseConfig(),
       messenger: createFakeTeamsMessenger(),
       runReview: async () => {
-        throw new Error("should not run");
+        runs++;
+        return {
+          reviewId: priorReviewId,
+          status: "completed",
+          report: { summary: NO_FINDINGS_SUMMARY, findings: [] },
+        };
       },
       buildReviewDeps: async () => fakeDeps,
     });
@@ -243,7 +259,76 @@ describeDb("createReviewWorker", () => {
     });
     await worker.drain();
     expect(result.duplicated).toBe(true);
-    expect(result.reviewId).toBe("existing-failed");
+    expect(result.reviewId).toBe(priorReviewId);
+    expect(runs).toBe(0);
+    const row = await getReviewByIdempotencyKey(pool, "dup-failed");
+    expect(row?.status).toBe("failed");
+  });
+
+  it("duplicate on completed prior review does not reschedule", async () => {
+    const priorReviewId = "existing-completed";
+    await claimReview(pool, {
+      reviewId: priorReviewId,
+      idempotencyKey: "dup-completed",
+      prUrl,
+      teamsConversationRef,
+    });
+    await markReviewRunning(pool, priorReviewId);
+    await markReviewFinished(pool, priorReviewId, {
+      reviewId: priorReviewId,
+      status: "completed",
+      report: { summary: NO_FINDINGS_SUMMARY, findings: [] },
+    });
+
+    let runs = 0;
+    const worker = createReviewWorker({
+      pool,
+      config: baseConfig(),
+      messenger: createFakeTeamsMessenger(),
+      runReview: async () => {
+        runs++;
+        return {
+          reviewId: priorReviewId,
+          status: "completed",
+          report: { summary: NO_FINDINGS_SUMMARY, findings: [] },
+        };
+      },
+      buildReviewDeps: async () => fakeDeps,
+    });
+    const result = await worker.enqueue({
+      prUrl,
+      idempotencyKey: "dup-completed",
+      teamsConversationRef,
+    });
+    await worker.drain();
+    expect(result.duplicated).toBe(true);
+    expect(runs).toBe(0);
+  });
+
+  it("unexpected buildReviewDeps error terminalizes row without rejecting drain", async () => {
+    const reviewId = randomUUID().replace(/-/g, "");
+    const worker = createReviewWorker({
+      pool,
+      config: baseConfig(),
+      messenger: createFakeTeamsMessenger(),
+      runReview: async () => {
+        throw new Error("runReview should not be reached");
+      },
+      buildReviewDeps: async () => {
+        throw new Error("github unavailable");
+      },
+    });
+    await worker.enqueue({
+      prUrl,
+      idempotencyKey: "worker-error",
+      teamsConversationRef,
+      reviewId,
+    });
+    await expect(worker.drain()).resolves.toBeUndefined();
+    const row = await getReviewByIdempotencyKey(pool, "worker-error");
+    expect(row?.status).toBe("failed");
+    expect(row?.error_code).toBe("worker_error");
+    expect(row?.error_message).toContain("github unavailable");
   });
 });
 

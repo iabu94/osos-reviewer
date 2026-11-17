@@ -96,6 +96,28 @@ export function createReviewWorker(deps: ReviewWorkerDeps): ReviewWorker {
   const semaphore = new Semaphore(maxConcurrent);
   const inFlight = new Set<Promise<void>>();
 
+  const terminalizeUnexpectedError = async (
+    reviewId: string,
+    err: unknown,
+  ): Promise<void> => {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error("review job failed", { reviewId, err: message });
+    try {
+      await markReviewFinished(deps.pool, reviewId, {
+        reviewId,
+        status: "failed",
+        error: { code: "worker_error", message },
+      });
+    } catch (finishErr) {
+      const finishMessage =
+        finishErr instanceof Error ? finishErr.message : String(finishErr);
+      logger.error("could not mark review finished after worker error", {
+        reviewId,
+        err: finishMessage,
+      });
+    }
+  };
+
   const runJob = async (
     reviewId: string,
     prUrl: string,
@@ -138,11 +160,7 @@ export function createReviewWorker(deps: ReviewWorkerDeps): ReviewWorker {
       }
       await markReviewFinished(deps.pool, reviewId, last!);
     } catch (err) {
-      logger.error("review job failed", {
-        reviewId,
-        err: err instanceof Error ? err.message : String(err),
-      });
-      throw err;
+      await terminalizeUnexpectedError(reviewId, err);
     } finally {
       semaphore.release();
     }
