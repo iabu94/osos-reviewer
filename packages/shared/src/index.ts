@@ -6,13 +6,18 @@ export {
 } from "./errors.js";
 export type {
   AppConfig,
+  CodeRelationshipRecord,
+  CodeSymbolRecord,
   CodingStandardRule,
   DocumentCategory,
   DocumentTechnology,
   EmbeddingConfig,
+  IndexScope,
+  RelationshipType,
   RepoConfig,
   RepoRole,
   ReviewRequest,
   ReviewMetadata,
   ReviewResult,
+  SymbolType,
 } from "./types.js";

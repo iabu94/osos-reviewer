@@ -78,3 +78,62 @@ export interface ReviewResult {
   claudeStdout?: string;
   error?: { code: string; message: string };
 }
+
+export type SymbolType =
+  | "controller"
+  | "endpoint"
+  | "dto"
+  | "service_method"
+  | "validation_rule"
+  | "entity"
+  | "dbcontext_config"
+  | "angular_service"
+  | "http_call"
+  | "interface"
+  | "component"
+  | "signal";
+
+export type RelationshipType =
+  | "calls"
+  | "references"
+  | "implements"
+  | "maps_to"
+  | "exposes"
+  | "http_calls"
+  | "validates"
+  | "injects";
+
+export type IndexScope = "baseline" | "pr";
+
+export interface CodeSymbolRecord {
+  id: number;
+  repo: string;
+  revision: string;
+  branchTag: string | null;
+  indexScope: IndexScope;
+  reviewId: string | null;
+  symbolType: SymbolType;
+  symbolName: string;
+  filePath: string;
+  lineStart: number | null;
+  lineEnd: number | null;
+  signature: string;
+  summary: string | null;
+  metadata: Record<string, unknown>;
+  commitSha: string;
+  contentHash: string;
+}
+
+export interface CodeRelationshipRecord {
+  id: number;
+  repo: string;
+  indexScope: IndexScope;
+  reviewId: string | null;
+  commitSha: string;
+  sourceSymbolId: number;
+  targetSymbolId: number | null;
+  targetName: string | null;
+  relationshipType: RelationshipType;
+  filePath: string | null;
+  lineStart: number | null;
+}

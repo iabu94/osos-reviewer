@@ -33,6 +33,30 @@ describeDb("db health", () => {
     expect(rows[0]?.udt_name).toBe("vector");
     await pool.end();
   });
+
+  it("migrate creates code_symbols and code_relationships", async () => {
+    const url = resolveTestDatabaseUrl();
+    if (!url) return;
+    await ensureDatabase(url);
+    const pool = createPool(url);
+    await migrate(pool);
+    const tables = await pool.query(`
+    SELECT table_name FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name IN ('code_symbols', 'code_relationships')
+  `);
+    expect(tables.rows.map((r) => r.table_name).sort()).toEqual([
+      "code_relationships",
+      "code_symbols",
+    ]);
+    const emb = await pool.query(`
+    SELECT udt_name, is_nullable FROM information_schema.columns
+    WHERE table_name = 'code_symbols' AND column_name = 'embedding'
+  `);
+    expect(emb.rows[0]?.udt_name).toBe("vector");
+    expect(emb.rows[0]?.is_nullable).toBe("YES");
+    await pool.end();
+  });
 });
 
 describe("resolveTestDatabaseUrl", () => {
