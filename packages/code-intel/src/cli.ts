@@ -53,7 +53,8 @@ export async function runIndexBaseline(
 const entry = process.argv[1] ? pathToFileURL(process.argv[1]).href : undefined;
 
 if (entry && import.meta.url === entry) {
-  runIndexBaseline(process.env, parseRepoId(process.argv.slice(2)))
+  Promise.resolve()
+    .then(() => runIndexBaseline(process.env, parseRepoId(process.argv.slice(2))))
     .then((report) => {
       process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     })
