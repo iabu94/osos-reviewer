@@ -3,6 +3,7 @@ import type {
   ImpactedSymbol,
   IndexScope,
   RelationshipType,
+  SymbolType,
 } from "@review/shared";
 import type { Pool } from "pg";
 
@@ -57,21 +58,73 @@ type TraceOpts = {
   limit?: number;
 };
 
-async function findSeedSymbols(opts: TraceOpts): Promise<CodeSymbolRecord[]> {
-  const base = {
+function scopeBase(opts: TraceOpts): {
+  pool: Pool;
+  repoIds?: string[];
+  limit: number;
+} {
+  return {
     pool: opts.pool,
     repoIds: opts.repoIds,
-    indexScope: opts.indexScope,
-    reviewId: opts.reviewId,
     limit: SYMBOL_LOAD_LIMIT,
   };
-  const rows = await lookupSymbols(base);
-  let seeds = rows.filter((s) => s.symbolName === opts.symbolName);
-  if (seeds.length === 0) {
-    const lower = opts.symbolName.toLowerCase();
-    seeds = rows.filter((s) => s.symbolName.toLowerCase() === lower);
+}
+
+async function loadScopeSymbols(opts: TraceOpts): Promise<CodeSymbolRecord[]> {
+  const base = scopeBase(opts);
+  if (opts.reviewId) {
+    const pr = await lookupSymbols({
+      ...base,
+      indexScope: "pr",
+      reviewId: opts.reviewId,
+    });
+    const baseline = await lookupSymbols({ ...base, indexScope: "baseline" });
+    return [...pr, ...baseline];
   }
-  return mergePreferPr(seeds);
+  if (opts.indexScope) {
+    return lookupSymbols({
+      ...base,
+      indexScope: opts.indexScope,
+      reviewId: opts.indexScope === "pr" ? opts.reviewId : undefined,
+    });
+  }
+  return lookupSymbols(base);
+}
+
+async function lookupByNameContains(
+  opts: TraceOpts,
+  nameContains: string,
+): Promise<CodeSymbolRecord[]> {
+  const base = { ...scopeBase(opts), nameContains };
+  if (opts.reviewId) {
+    const pr = await lookupSymbols({
+      ...base,
+      indexScope: "pr",
+      reviewId: opts.reviewId,
+    });
+    const baseline = await lookupSymbols({ ...base, indexScope: "baseline" });
+    return [...pr, ...baseline];
+  }
+  if (opts.indexScope) {
+    return lookupSymbols({
+      ...base,
+      indexScope: opts.indexScope,
+      reviewId: opts.indexScope === "pr" ? opts.reviewId : undefined,
+    });
+  }
+  return lookupSymbols(base);
+}
+
+function filterSeedMatches(rows: CodeSymbolRecord[], symbolName: string): CodeSymbolRecord[] {
+  const exact = rows.filter((s) => s.symbolName === symbolName);
+  if (exact.length > 0) return exact;
+  const lower = symbolName.toLowerCase();
+  return rows.filter((s) => s.symbolName.toLowerCase() === lower);
+}
+
+async function findSeedSymbols(opts: TraceOpts): Promise<CodeSymbolRecord[]> {
+  const candidates = await lookupByNameContains(opts, opts.symbolName);
+  return mergePreferPr(filterSeedMatches(candidates, opts.symbolName));
 }
 
 function resolveByExactName(
@@ -83,6 +136,58 @@ function resolveByExactName(
   return mergePreferPr(exact)[0];
 }
 
+interface SymbolRow {
+  id: string;
+  repo: string;
+  revision: string;
+  branch_tag: string | null;
+  index_scope: IndexScope;
+  review_id: string | null;
+  symbol_type: SymbolType;
+  symbol_name: string;
+  file_path: string;
+  line_start: number | null;
+  line_end: number | null;
+  signature: string;
+  summary: string | null;
+  metadata: Record<string, unknown>;
+  commit_sha: string;
+  content_hash: string;
+}
+
+function mapSymbolRow(row: SymbolRow): CodeSymbolRecord {
+  return {
+    id: Number(row.id),
+    repo: row.repo,
+    revision: row.revision,
+    branchTag: row.branch_tag,
+    indexScope: row.index_scope,
+    reviewId: row.review_id,
+    symbolType: row.symbol_type,
+    symbolName: row.symbol_name,
+    filePath: row.file_path,
+    lineStart: row.line_start,
+    lineEnd: row.line_end,
+    signature: row.signature,
+    summary: row.summary,
+    metadata: row.metadata ?? {},
+    commitSha: row.commit_sha,
+    contentHash: row.content_hash,
+  };
+}
+
+async function fetchSymbolById(pool: Pool, symbolId: number): Promise<CodeSymbolRecord | undefined> {
+  const result = await pool.query<SymbolRow>(
+    `SELECT id, repo, revision, branch_tag, index_scope, review_id, symbol_type,
+            symbol_name, file_path, line_start, line_end, signature, summary,
+            metadata, commit_sha, content_hash
+     FROM code_symbols WHERE id = $1`,
+    [symbolId],
+  );
+  const row = result.rows[0];
+  return row ? mapSymbolRow(row) : undefined;
+}
+
 export async function traceSymbolImpact(opts: TraceOpts): Promise<ImpactedSymbol[]> {
   const maxDepth = clampMaxDepth(opts.maxDepth);
   const limit = clampLimit(opts.limit);
@@ -90,13 +195,7 @@ export async function traceSymbolImpact(opts: TraceOpts): Promise<ImpactedSymbol
   const seeds = await findSeedSymbols(opts);
   if (seeds.length === 0) return [];
 
-  const scopeSymbols = await lookupSymbols({
-    pool: opts.pool,
-    repoIds: opts.repoIds,
-    indexScope: opts.indexScope,
-    reviewId: opts.reviewId,
-    limit: SYMBOL_LOAD_LIMIT,
-  });
+  const scopeSymbols = await loadScopeSymbols(opts);
   const symbolById = new Map<number, CodeSymbolRecord>();
   for (const row of scopeSymbols) symbolById.set(row.id, row);
 
@@ -131,17 +230,14 @@ export async function traceSymbolImpact(opts: TraceOpts): Promise<ImpactedSymbol
       let target: CodeSymbolRecord | undefined;
       if (edge.targetSymbolId !== null) {
         target = symbolById.get(edge.targetSymbolId);
+        if (!target) {
+          target = await fetchSymbolById(opts.pool, edge.targetSymbolId);
+          if (target) symbolById.set(target.id, target);
+        }
       } else if (edge.targetName) {
         target = resolveByExactName(scopeSymbols, edge.targetName);
         if (!target) {
-          const extra = await lookupSymbols({
-            pool: opts.pool,
-            repoIds: opts.repoIds,
-            indexScope: opts.indexScope,
-            reviewId: opts.reviewId,
-            nameContains: edge.targetName,
-            limit: SYMBOL_LOAD_LIMIT,
-          });
+          const extra = await lookupByNameContains(opts, edge.targetName);
           target = resolveByExactName(extra, edge.targetName);
         }
         if (target) symbolById.set(target.id, target);
