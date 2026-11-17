@@ -24,16 +24,35 @@ export interface GetCodingStandardsDeps {
   embedder: EmbeddingProvider;
 }
 
-function boundRules(rules: CodingStandardRule[]): CodingStandardRule[] {
-  const size = (r: CodingStandardRule[]) =>
-    JSON.stringify({ status: "ok", data: { rules: r } }).length;
+const FIELD_CAP_STEPS = [1500, 1000, 600, 300, 150, 50, 0];
+
+function resultSize(rules: CodingStandardRule[]): number {
+  const result: McpToolResult = { status: "ok", data: { rules } };
+  return JSON.stringify(result).length;
+}
+
+function clip(value: string, cap: number): string {
+  return value.length > cap ? value.slice(0, cap) : value;
+}
+
+/**
+ * Guarantees JSON.stringify of the ok result is strictly below
+ * MAX_PAYLOAD_CHARS: shrinks ruleText, then metadata strings, then drops
+ * trailing rules (the final rule is kept with minimal fields).
+ */
+export function boundRules(rules: CodingStandardRule[]): CodingStandardRule[] {
   let bounded = rules;
-  let cap = 1500;
-  while (size(bounded) >= MAX_PAYLOAD_CHARS && cap > 200) {
-    cap -= 100;
-    bounded = rules.map((r) => ({ ...r, ruleText: r.ruleText.slice(0, cap) }));
+  for (const cap of FIELD_CAP_STEPS) {
+    if (resultSize(bounded) < MAX_PAYLOAD_CHARS) return bounded;
+    bounded = rules.map((r) => ({
+      ...r,
+      ruleText: clip(r.ruleText, cap),
+      documentPath: clip(r.documentPath, Math.max(cap, 200)),
+      documentTitle: clip(r.documentTitle, Math.max(cap, 100)),
+      section: clip(r.section, Math.max(cap, 100)),
+    }));
   }
-  while (size(bounded) >= MAX_PAYLOAD_CHARS && bounded.length > 1) {
+  while (resultSize(bounded) >= MAX_PAYLOAD_CHARS && bounded.length > 1) {
     bounded = bounded.slice(0, -1);
   }
   return bounded;

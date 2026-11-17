@@ -3,6 +3,7 @@ import { createEmbeddingProvider } from "@review/knowledge";
 import { loadConfig } from "@review/shared";
 
 import {
+  getCodingStandardsInputSchema,
   handleGetCodingStandards,
   type GetCodingStandardsDeps,
 } from "./get_coding_standards.js";
@@ -51,6 +52,15 @@ export async function handleToolRouted(
     return handleTool(name, args);
   }
 
+  const parsed = getCodingStandardsInputSchema.safeParse(args ?? {});
+  if (!parsed.success) {
+    return {
+      status: "service_error",
+      data: null,
+      error: { code: "invalid_args", message: parsed.error.message },
+    };
+  }
+
   let deps: GetCodingStandardsDeps;
   try {
     deps = await options.getStandardsDeps();
@@ -64,5 +74,5 @@ export async function handleToolRouted(
       },
     };
   }
-  return handleGetCodingStandards(args, deps);
+  return handleGetCodingStandards(parsed.data, deps);
 }

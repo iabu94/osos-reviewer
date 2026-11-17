@@ -8,6 +8,8 @@ import {
 } from "@review/knowledge";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import type { Pool } from "pg";
+
 import { handleGetCodingStandards } from "../src/tools/get_coding_standards.js";
 import { handleToolRouted } from "../src/tools/router.js";
 
@@ -111,6 +113,47 @@ describeWithDatabase("get_coding_standards", () => {
     );
     expect(result.status).toBe("service_error");
     expect(result.error?.code).toBe("retrieval_failed");
+  });
+
+  it("router returns invalid_args before initializing deps", async () => {
+    let initialized = false;
+    const options = {
+      getStandardsDeps: async () => {
+        initialized = true;
+        throw new Error("broken db config");
+      },
+    };
+    for (const args of [{}, { query: "" }, { query: "x", limit: 99 }]) {
+      const result = await handleToolRouted("get_coding_standards", args, options);
+      expect(result.status).toBe("service_error");
+      expect(result.error?.code).toBe("invalid_args");
+    }
+    expect(initialized).toBe(false);
+  });
+
+  it("keeps payload under 12000 chars for oversized rules and metadata", async () => {
+    const huge = (n: number) => "\"\\é".repeat(n);
+    const fakePool = {
+      query: async () => ({
+        rows: Array.from({ length: 10 }, (_, i) => ({
+          source_path: `a/${i}/${huge(5000)}.md`,
+          document_title: huge(5000),
+          section: huge(5000),
+          category: "coding-standards",
+          technology: "angular",
+          chunk_text: huge(50_000),
+          distance: 0.1,
+        })),
+      }),
+    } as unknown as Pool;
+    for (const limit of [1, 10]) {
+      const result = await handleGetCodingStandards(
+        { query: "x", limit },
+        { pool: fakePool, embedder },
+      );
+      expect(result.status).toBe("ok");
+      expect(JSON.stringify(result).length).toBeLessThan(12_000);
+    }
   });
 
   // Keep last: empties the index.
