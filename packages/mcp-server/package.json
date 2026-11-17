@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.6.1",
+    "@review/code-intel": "workspace:*",
     "@review/db": "workspace:*",
     "@review/knowledge": "workspace:*",
     "@review/shared": "workspace:*",

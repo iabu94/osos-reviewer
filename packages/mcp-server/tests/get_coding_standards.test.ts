@@ -91,22 +91,27 @@ describeWithDatabase("get_coding_standards", () => {
     expect(result.error?.code).toBe("retrieval_failed");
   });
 
+  const routerOptions = () => ({
+    getStandardsDeps: async () => deps,
+    getCodeIntelDeps: async () => deps,
+  });
+
   it("router sends get_coding_standards to the real handler", async () => {
     const result = await handleToolRouted(
       "get_coding_standards",
       { query: "Prefer OnPush change detection", technology: "angular" },
-      { getStandardsDeps: async () => deps },
+      routerOptions(),
     );
     expect(result.status).toBe("ok");
 
-    const stub = await handleToolRouted("check_reusability", {}, {
-      getStandardsDeps: async () => deps,
-    });
-    expect(stub.status).toBe("no_results");
+    const reuse = await handleToolRouted(
+      "check_reusability",
+      { query: "OnPush" },
+      routerOptions(),
+    );
+    expect(["ok", "no_results"]).toContain(reuse.status);
 
-    const unknown = await handleToolRouted("nope", {}, {
-      getStandardsDeps: async () => deps,
-    });
+    const unknown = await handleToolRouted("nope", {}, routerOptions());
     expect(unknown.error?.code).toBe("unknown_tool");
   });
 
@@ -116,6 +121,9 @@ describeWithDatabase("get_coding_standards", () => {
       { query: "x" },
       {
         getStandardsDeps: async () => {
+          throw new Error("bad config");
+        },
+        getCodeIntelDeps: async () => {
           throw new Error("bad config");
         },
       },
@@ -128,6 +136,10 @@ describeWithDatabase("get_coding_standards", () => {
     let initialized = false;
     const options = {
       getStandardsDeps: async () => {
+        initialized = true;
+        throw new Error("broken db config");
+      },
+      getCodeIntelDeps: async () => {
         initialized = true;
         throw new Error("broken db config");
       },

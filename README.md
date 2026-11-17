@@ -104,7 +104,7 @@ pnpm test
 
 **Smoke test:** `pnpm smoke:phase2` (or `EMBEDDING_PROVIDER=fake ./scripts/smoke-phase2.sh`). It runs tests against `review_test`, then ingests into the real `DATABASE_URL` so the index is left populated.
 
-Only `get_coding_standards` is live. `trace_fe_be_integration`, `trace_symbol_impact`, and `check_reusability` remain Phase 1 stubs. The MCP server reads the same env vars lazily on the first standards call.
+See **Phase 4** below for the code-intelligence MCP tools. The MCP server lazily initializes Postgres and the embedder from env on the first tool call.
 
 ## Phase 3: Code intelligence
 
@@ -126,7 +126,36 @@ pnpm --filter @review/code-intel index-baseline --repo-id fe
 
 **Smoke test:** `pnpm smoke:phase3` (or `EMBEDDING_PROVIDER=fake ./scripts/smoke-phase3.sh`) runs the code-intel, git-manager, and orchestrator tests, then baseline-indexes the fixture trees into the test database.
 
-The MCP tools `trace_fe_be_integration`, `trace_symbol_impact`, and `check_reusability` are **still stubs**; consuming the index from MCP is Phase 4.
+## Phase 4: MCP review tools
+
+All four MCP tools are live. They read the same Postgres code index and knowledge base as Phase 2–3, with structured JSON results bounded under 12 000 characters.
+
+| Tool | Purpose |
+|------|---------|
+| `trace_fe_be_integration` | Cross-repo FE/BE contract mismatches |
+| `trace_symbol_impact` | Relationship impact from a seed symbol |
+| `check_reusability` | Similar-symbol candidates for reuse review |
+| `get_coding_standards` | Document RAG (unchanged from Phase 2) |
+
+**Example MCP arguments**
+
+```json
+{ "backendRepoIds": ["be"], "frontendRepoIds": ["fe"] }
+```
+
+```json
+{ "symbolName": "OrdersController", "repoIds": ["be"], "maxDepth": 2 }
+```
+
+```json
+{ "query": "list orders from api", "repoIds": ["be"], "limit": 5 }
+```
+
+`check_reusability` explanations use **candidate** wording — they are hints for human review, not proof of duplication. When any embeddings exist in the searched scope, the vector path is preferred and name-only matches for symbols without embeddings may not appear (Task 4 retrieval behavior).
+
+Phase 5 still owns the Claude review prompt and Teams integration; MCP tools return retrieval payloads only.
+
+**Smoke test:** `pnpm smoke:phase4` (or `EMBEDDING_PROVIDER=fake ./scripts/smoke-phase4.sh`) indexes happy-path and deliberate-mismatch fixtures into `TEST_DATABASE_URL`, then runs `@review/code-intel` and `@review/mcp-server` tests.
 
 ## Packages
 
@@ -137,7 +166,7 @@ The MCP tools `trace_fe_be_integration`, `trace_symbol_impact`, and `check_reusa
 | `@review/git-manager` | Ticket/companion, worktrees, focused diff |
 | `@review/code-intel` | Tree-sitter/TypeScript symbol parsing, baseline + PR delta indexing, retrieval |
 | `@review/knowledge` | Knowledge-base discovery, chunking, embeddings, ingest, retrieval |
-| `@review/mcp-server` | MCP tools over stdio: live `get_coding_standards` + three Phase 1 stubs |
+| `@review/mcp-server` | MCP tools over stdio: integration, impact, reusability, and coding standards |
 | `@review/orchestrator` | Review lifecycle + CLI |
 
 ## Spec & plan

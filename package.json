@@ -8,7 +8,8 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "smoke:phase1": "bash ./scripts/smoke-phase1.sh",
     "smoke:phase2": "bash ./scripts/smoke-phase2.sh",
-    "smoke:phase3": "bash ./scripts/smoke-phase3.sh"
+    "smoke:phase3": "bash ./scripts/smoke-phase3.sh",
+    "smoke:phase4": "bash ./scripts/smoke-phase4.sh"
   },
   "engines": {
     "node": ">=22"

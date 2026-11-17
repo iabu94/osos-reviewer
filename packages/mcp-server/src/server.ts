@@ -5,6 +5,7 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import {
+  createEnvCodeIntelDeps,
   createEnvStandardsDeps,
   handleToolRouted,
   TOOL_NAMES,
@@ -28,17 +29,89 @@ const STANDARDS_INPUT_SCHEMA = {
   required: ["query"],
 };
 
-const STUB_INPUT_SCHEMA = {
+const TRACE_FE_BE_INPUT_SCHEMA = {
   type: "object",
   properties: {
-    query: { type: "string" },
-    repoIds: { type: "array", items: { type: "string" } },
+    backendRepoIds: { type: "array", items: { type: "string" }, minItems: 1 },
+    frontendRepoIds: { type: "array", items: { type: "string" }, minItems: 1 },
+    reviewId: { type: "string" },
+    indexScope: { type: "string", enum: ["baseline", "pr"] },
+    limit: { type: "integer", minimum: 1 },
   },
+  required: ["backendRepoIds", "frontendRepoIds"],
+};
+
+const TRACE_SYMBOL_IMPACT_INPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    symbolName: { type: "string", minLength: 1 },
+    repoIds: { type: "array", items: { type: "string" } },
+    reviewId: { type: "string" },
+    indexScope: { type: "string", enum: ["baseline", "pr"] },
+    maxDepth: { type: "integer", minimum: 0 },
+    limit: { type: "integer", minimum: 1 },
+  },
+  required: ["symbolName"],
+};
+
+const CHECK_REUSABILITY_INPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    query: { type: "string", minLength: 1 },
+    repoIds: { type: "array", items: { type: "string" } },
+    symbolTypes: {
+      type: "array",
+      items: {
+        type: "string",
+        enum: [
+          "controller",
+          "endpoint",
+          "dto",
+          "service_method",
+          "validation_rule",
+          "entity",
+          "dbcontext_config",
+          "angular_service",
+          "http_call",
+          "interface",
+          "component",
+          "signal",
+        ],
+      },
+    },
+    reviewId: { type: "string" },
+    indexScope: { type: "string", enum: ["baseline", "pr"] },
+    limit: { type: "integer", minimum: 1 },
+  },
+  required: ["query"],
+};
+
+const TOOL_DESCRIPTIONS: Record<(typeof TOOL_NAMES)[number], string> = {
+  trace_fe_be_integration:
+    "Trace frontend HTTP calls against backend endpoints and DTOs using indexed code intelligence; returns integration mismatches.",
+  trace_symbol_impact:
+    "Trace relationship graph impact from a seed symbol name across indexed repositories.",
+  check_reusability:
+    "Find similar symbols as reusability candidates (vector and name fallback); explanations are hints, not proof of duplication.",
+  get_coding_standards:
+    "Retrieve relevant coding standards, architecture, and security rules from the ingested knowledge base using real vector retrieval (pgvector).",
+};
+
+const TOOL_INPUT_SCHEMAS: Record<(typeof TOOL_NAMES)[number], object> = {
+  trace_fe_be_integration: TRACE_FE_BE_INPUT_SCHEMA,
+  trace_symbol_impact: TRACE_SYMBOL_IMPACT_INPUT_SCHEMA,
+  check_reusability: CHECK_REUSABILITY_INPUT_SCHEMA,
+  get_coding_standards: STANDARDS_INPUT_SCHEMA,
 };
 
 export function createServer(options?: Partial<RouterOptions>): Server {
+  const getStandardsDeps =
+    options?.getStandardsDeps ?? createEnvStandardsDeps();
+  const getCodeIntelDeps =
+    options?.getCodeIntelDeps ?? createEnvCodeIntelDeps();
   const routerOptions: RouterOptions = {
-    getStandardsDeps: options?.getStandardsDeps ?? createEnvStandardsDeps(),
+    getStandardsDeps,
+    getCodeIntelDeps,
   };
   const server = new Server(
     { name: "review-mcp", version: "0.0.1" },
@@ -46,20 +119,11 @@ export function createServer(options?: Partial<RouterOptions>): Server {
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: TOOL_NAMES.map((name) =>
-      name === "get_coding_standards"
-        ? {
-            name,
-            description:
-              "Retrieve relevant coding standards, architecture, and security rules from the ingested knowledge base using real vector retrieval (pgvector).",
-            inputSchema: STANDARDS_INPUT_SCHEMA,
-          }
-        : {
-            name,
-            description: `Stub Phase 1 tool: ${name}`,
-            inputSchema: STUB_INPUT_SCHEMA,
-          },
-    ),
+    tools: TOOL_NAMES.map((name) => ({
+      name,
+      description: TOOL_DESCRIPTIONS[name],
+      inputSchema: TOOL_INPUT_SCHEMAS[name],
+    })),
   }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
