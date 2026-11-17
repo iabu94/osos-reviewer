@@ -20,3 +20,4 @@ export { httpContractKey, normalizeRoutePath } from "./normalize-route.js";
 export { mergePreferPr } from "./merge-scope.js";
 export { traceFeBeIntegration } from "./trace-integration.js";
 export { traceSymbolImpact } from "./trace-impact.js";
+export { findSimilarSymbols } from "./find-similar.js";
