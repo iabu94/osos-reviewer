@@ -50,6 +50,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@review/shared':
+        specifier: workspace:*
+        version: link:../shared
       pg:
         specifier: ^8.13.1
         version: 8.23.1
