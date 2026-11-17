@@ -39,10 +39,6 @@ export class FakeEmbeddingProvider implements EmbeddingProvider {
   }
 }
 
-interface EmbeddingResponse {
-  data?: Array<{ embedding?: unknown }>;
-}
-
 export class OpenAICompatibleEmbeddingProvider
   implements EmbeddingProvider
 {
@@ -83,32 +79,40 @@ export class OpenAICompatibleEmbeddingProvider
       );
     }
 
-    let payload: EmbeddingResponse;
+    let payload: unknown;
     try {
-      payload = (await response.json()) as EmbeddingResponse;
+      payload = await response.json();
     } catch (error) {
       throw new EmbeddingError("Embedding response was not valid JSON", {
         cause: error,
       });
     }
 
-    if (!Array.isArray(payload.data) || payload.data.length !== texts.length) {
+    const data =
+      typeof payload === "object" && payload !== null && "data" in payload
+        ? payload.data
+        : undefined;
+    if (!Array.isArray(data) || data.length !== texts.length) {
       throw new EmbeddingError(
-        `Embedding response returned ${payload.data?.length ?? 0} vectors for ${texts.length} inputs`,
+        `Embedding response returned ${Array.isArray(data) ? data.length : 0} vectors for ${texts.length} inputs`,
       );
     }
 
-    return payload.data.map((item, index) => {
+    return data.map((item, index) => {
+      const embedding =
+        typeof item === "object" && item !== null && "embedding" in item
+          ? item.embedding
+          : undefined;
       if (
-        !Array.isArray(item.embedding) ||
-        item.embedding.length !== this.dimensions ||
-        !item.embedding.every((value) => typeof value === "number")
+        !Array.isArray(embedding) ||
+        embedding.length !== this.dimensions ||
+        !embedding.every((value) => typeof value === "number")
       ) {
         throw new EmbeddingError(
           `Embedding vector ${index} must contain exactly ${this.dimensions} numbers`,
         );
       }
-      return item.embedding as number[];
+      return embedding as number[];
     });
   }
 }

@@ -1,6 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createEmbeddingProvider } from "../src/index.js";
+import {
+  createEmbeddingProvider,
+  EmbeddingError,
+} from "../src/index.js";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("createEmbeddingProvider", () => {
   it("fake embedder is deterministic and 768-d", async () => {
@@ -31,5 +38,58 @@ describe("createEmbeddingProvider", () => {
     );
 
     expect(similarity).toBeGreaterThan(0);
+  });
+
+  it("throws EmbeddingError for malformed data entries", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ data: [null] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+    const p = createEmbeddingProvider({
+      provider: "openai_compatible",
+      baseUrl: "https://embeddings.example.test",
+      apiKey: "test-key",
+      model: "test-model",
+      dimensions: 768,
+    });
+
+    await expect(p.embed(["text"])).rejects.toBeInstanceOf(EmbeddingError);
+  });
+
+  it("throws EmbeddingError for non-2xx responses", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 503 })),
+    );
+    const p = createEmbeddingProvider({
+      provider: "openai_compatible",
+      baseUrl: "https://embeddings.example.test",
+      apiKey: "test-key",
+      model: "test-model",
+      dimensions: 768,
+    });
+
+    await expect(p.embed(["text"])).rejects.toBeInstanceOf(EmbeddingError);
+  });
+
+  it("throws EmbeddingError when fetch rejects", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new Error("network unavailable")),
+    );
+    const p = createEmbeddingProvider({
+      provider: "openai_compatible",
+      baseUrl: "https://embeddings.example.test",
+      apiKey: "test-key",
+      model: "test-model",
+      dimensions: 768,
+    });
+
+    await expect(p.embed(["text"])).rejects.toBeInstanceOf(EmbeddingError);
   });
 });
