@@ -4,6 +4,7 @@ export {
   TicketUnresolvedError,
   UnknownRepositoryError,
 } from "./errors.js";
+export { NO_FINDINGS_SUMMARY } from "./types.js";
 export type {
   AppConfig,
   CodeRelationshipRecord,
@@ -12,12 +13,18 @@ export type {
   DocumentCategory,
   DocumentTechnology,
   EmbeddingConfig,
+  FindingCategory,
+  FindingConfidence,
+  FindingSeverity,
   ImpactedSymbol,
   IndexScope,
   IntegrationMismatch,
   IntegrationMismatchKind,
   RelationshipType,
   ReusabilityCandidate,
+  ReviewDiagnostics,
+  ReviewFinding,
+  ReviewReport,
   SymbolEvidence,
   RepoConfig,
   RepoRole,

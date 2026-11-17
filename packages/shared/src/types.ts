@@ -71,12 +71,66 @@ export interface ReviewMetadata {
   companionHeadSha?: string;
 }
 
+export type FindingCategory =
+  | "integration"
+  | "reusability"
+  | "symbol_impact"
+  | "coding_standard"
+  | "other";
+
+export type FindingSeverity =
+  | "critical"
+  | "high"
+  | "medium"
+  | "low"
+  | "info";
+
+export type FindingConfidence = "confirmed" | "potential";
+
+export interface ReviewFinding {
+  category: FindingCategory;
+  severity: FindingSeverity;
+  confidence: FindingConfidence;
+  title: string;
+  description: string;
+  evidence: string;
+  repo?: string;
+  filePath?: string;
+  lineStart?: number | null;
+  lineEnd?: number | null;
+  relatedSymbol?: string;
+  relatedStandard?: string;
+  suggestedAction?: string;
+}
+
+export interface ReviewReport {
+  summary: string;
+  findings: ReviewFinding[];
+}
+
+export interface ReviewDiagnostics {
+  durationMs?: number;
+  durationApiMs?: number;
+  numTurns?: number;
+  sessionId?: string;
+  totalCostUsd?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
+}
+
+export const NO_FINDINGS_SUMMARY =
+  "No actionable issues were identified by this review. This does not guarantee the pull request is defect-free.";
+
 export interface ReviewResult {
   reviewId: string;
   status: "completed" | "failed";
   metadata?: ReviewMetadata;
   claudeStdout?: string;
   error?: { code: string; message: string };
+  report?: ReviewReport;
+  diagnostics?: ReviewDiagnostics;
 }
 
 export type SymbolType =
