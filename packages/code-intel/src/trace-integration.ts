@@ -15,6 +15,8 @@ const DEFAULT_MISMATCH_LIMIT = 20;
 const MAX_MISMATCH_LIMIT = 50;
 const SYMBOL_LOAD_LIMIT = 200;
 
+const TRACE_SYMBOL_TYPES: SymbolType[] = ["endpoint", "http_call", "dto", "interface"];
+
 function clampMismatchLimit(limit: number | undefined): number {
   if (limit === undefined || !Number.isFinite(limit)) {
     return DEFAULT_MISMATCH_LIMIT;
@@ -93,6 +95,48 @@ function findTypeRow(
   );
 }
 
+function mismatchDedupeKey(m: IntegrationMismatch): string {
+  const path = normalizeRoutePath(String(m.detail?.path ?? ""));
+  const method = (m.detail?.httpMethod ?? "").toUpperCase();
+  let dtoName = "";
+  if (m.kind === "shape_mismatch") {
+    const match = m.summary.match(/^DTO shape differs for (\S+) on /);
+    dtoName = match?.[1] ?? "";
+  }
+  return `${m.kind}\0${path}\0${method}\0${dtoName}`;
+}
+
+function dedupeMismatches(items: IntegrationMismatch[]): IntegrationMismatch[] {
+  const seen = new Set<string>();
+  const out: IntegrationMismatch[] = [];
+  for (const m of items) {
+    const key = mismatchDedupeKey(m);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(m);
+  }
+  return out;
+}
+
+async function loadSymbolsForScope(
+  base: { pool: Pool; repoIds: string[]; limit: number },
+  indexScope: IndexScope,
+  reviewId?: string,
+): Promise<CodeSymbolRecord[]> {
+  const rows: CodeSymbolRecord[] = [];
+  for (const symbolType of TRACE_SYMBOL_TYPES) {
+    rows.push(
+      ...(await lookupSymbols({
+        ...base,
+        symbolTypes: [symbolType],
+        indexScope,
+        reviewId: indexScope === "pr" ? reviewId : undefined,
+      })),
+    );
+  }
+  return rows;
+}
+
 async function loadScopedSymbols(opts: {
   pool: Pool;
   repoIds: string[];
@@ -101,22 +145,18 @@ async function loadScopedSymbols(opts: {
 }): Promise<CodeSymbolRecord[]> {
   const base = { pool: opts.pool, repoIds: opts.repoIds, limit: SYMBOL_LOAD_LIMIT };
   if (opts.reviewId) {
-    const pr = await lookupSymbols({
-      ...base,
-      indexScope: "pr",
-      reviewId: opts.reviewId,
-    });
-    const baseline = await lookupSymbols({ ...base, indexScope: "baseline" });
+    const pr = await loadSymbolsForScope(base, "pr", opts.reviewId);
+    const baseline = await loadSymbolsForScope(base, "baseline");
     return mergePreferPr([...pr, ...baseline]);
   }
   if (opts.indexScope) {
-    return lookupSymbols({
-      ...base,
-      indexScope: opts.indexScope,
-      reviewId: opts.indexScope === "pr" ? opts.reviewId : undefined,
-    });
+    return loadSymbolsForScope(
+      base,
+      opts.indexScope,
+      opts.indexScope === "pr" ? opts.reviewId : undefined,
+    );
   }
-  return lookupSymbols({ ...base, indexScope: "baseline" });
+  return loadSymbolsForScope(base, "baseline");
 }
 
 export async function traceFeBeIntegration(opts: {
@@ -178,8 +218,8 @@ export async function traceFeBeIntegration(opts: {
         mismatches.push({
           kind: "shape_mismatch",
           summary: `DTO shape differs for ${typeName} on ${key}`,
-          frontend: toEvidence(call),
-          backend: toEvidence(backend),
+          frontend: toEvidence(feDto ?? call),
+          backend: toEvidence(beDto ?? backend),
           detail: {
             httpMethod: method,
             path,
@@ -231,5 +271,5 @@ export async function traceFeBeIntegration(opts: {
     }
   }
 
-  return mismatches.slice(0, clampMismatchLimit(opts.limit));
+  return dedupeMismatches(mismatches).slice(0, clampMismatchLimit(opts.limit));
 }
