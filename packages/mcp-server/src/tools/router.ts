@@ -67,18 +67,43 @@ function createSharedEnvDeps(
   };
 }
 
+/** One lazy factory per env object (single pool + migrate for all tools). */
+const envDepsByEnv = new Map<NodeJS.ProcessEnv, () => Promise<CodeIntelDeps>>();
+
+function getSharedEnvDepsFactory(
+  env: NodeJS.ProcessEnv = process.env,
+): () => Promise<CodeIntelDeps> {
+  let factory = envDepsByEnv.get(env);
+  if (!factory) {
+    factory = createSharedEnvDeps(env);
+    envDepsByEnv.set(env, factory);
+  }
+  return factory;
+}
+
+/** Default router deps: one shared lazy pool/embedder for standards + code-intel. */
+export function createEnvRouterDeps(
+  env: NodeJS.ProcessEnv = process.env,
+): Pick<RouterOptions, "getStandardsDeps" | "getCodeIntelDeps"> {
+  const shared = getSharedEnvDepsFactory(env);
+  return {
+    getStandardsDeps: shared,
+    getCodeIntelDeps: shared,
+  };
+}
+
 /** Lazily builds pool + embedder from env on the first standards call. */
 export function createEnvStandardsDeps(
   env: NodeJS.ProcessEnv = process.env,
 ): () => Promise<GetCodingStandardsDeps> {
-  return createSharedEnvDeps(env);
+  return getSharedEnvDepsFactory(env);
 }
 
 /** Lazily builds pool + embedder from env on the first code-intel call. */
 export function createEnvCodeIntelDeps(
   env: NodeJS.ProcessEnv = process.env,
 ): () => Promise<CodeIntelDeps> {
-  return createSharedEnvDeps(env);
+  return getSharedEnvDepsFactory(env);
 }
 
 async function loadCodeIntelDeps(

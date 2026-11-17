@@ -5,8 +5,7 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import {
-  createEnvCodeIntelDeps,
-  createEnvStandardsDeps,
+  createEnvRouterDeps,
   handleToolRouted,
   TOOL_NAMES,
   type RouterOptions,
@@ -105,13 +104,12 @@ const TOOL_INPUT_SCHEMAS: Record<(typeof TOOL_NAMES)[number], object> = {
 };
 
 export function createServer(options?: Partial<RouterOptions>): Server {
-  const getStandardsDeps =
-    options?.getStandardsDeps ?? createEnvStandardsDeps();
-  const getCodeIntelDeps =
-    options?.getCodeIntelDeps ?? createEnvCodeIntelDeps();
+  const envDefaults = createEnvRouterDeps();
   const routerOptions: RouterOptions = {
-    getStandardsDeps,
-    getCodeIntelDeps,
+    getStandardsDeps:
+      options?.getStandardsDeps ?? envDefaults.getStandardsDeps,
+    getCodeIntelDeps:
+      options?.getCodeIntelDeps ?? envDefaults.getCodeIntelDeps,
   };
   const server = new Server(
     { name: "review-mcp", version: "0.0.1" },

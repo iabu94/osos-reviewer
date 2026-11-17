@@ -1,7 +1,13 @@
 import { pathToFileURL } from "node:url";
 import { startMcpServer } from "./server.js";
 
-export { handleToolRouted, TOOL_NAMES } from "./tools/router.js";
+export {
+  createEnvCodeIntelDeps,
+  createEnvRouterDeps,
+  createEnvStandardsDeps,
+  handleToolRouted,
+  TOOL_NAMES,
+} from "./tools/router.js";
 export {
   getCodingStandardsInputSchema,
   handleGetCodingStandards,

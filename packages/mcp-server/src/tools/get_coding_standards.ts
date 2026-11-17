@@ -4,9 +4,10 @@ import type { CodingStandardRule } from "@review/shared";
 import type { Pool } from "pg";
 import { z } from "zod";
 
+import { MAX_PAYLOAD_CHARS } from "./bound.js";
 import type { McpToolResult } from "./stubs.js";
 
-export const MAX_PAYLOAD_CHARS = 12_000;
+export { MAX_PAYLOAD_CHARS };
 
 export const getCodingStandardsInputSchema = z.object({
   query: z.string().min(1),
