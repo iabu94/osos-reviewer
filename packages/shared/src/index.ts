@@ -6,6 +6,10 @@ export {
 } from "./errors.js";
 export type {
   AppConfig,
+  CodingStandardRule,
+  DocumentCategory,
+  DocumentTechnology,
+  EmbeddingConfig,
   RepoConfig,
   RepoRole,
   ReviewRequest,

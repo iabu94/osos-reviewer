@@ -6,6 +6,10 @@ const DEFAULT_TICKET_PATTERN = "[A-Z]+-\\d+";
 const DEFAULT_FALLBACK = "origin/develop";
 const DEFAULT_TIMEOUT_MS = 120_000;
 const DEFAULT_CLAUDE = "claude";
+const DEFAULT_KNOWLEDGE_BASE_PATH = "knowledge-base";
+const DEFAULT_EMBEDDING_PROVIDER = "openai_compatible";
+const DEFAULT_EMBEDDING_BASE_URL = "https://api.openai.com/v1";
+const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
 
 const repoSchema = z.object({
   id: z.string().min(1),
@@ -45,11 +49,37 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
 
   const repos: RepoConfig[] = parsed.data;
   const patternSource = env.TICKET_PATTERN ?? DEFAULT_TICKET_PATTERN;
+  const embeddingProvider =
+    env.EMBEDDING_PROVIDER ?? DEFAULT_EMBEDDING_PROVIDER;
+
+  if (
+    embeddingProvider !== "openai_compatible" &&
+    embeddingProvider !== "fake"
+  ) {
+    throw new ConfigError(
+      "EMBEDDING_PROVIDER must be openai_compatible or fake",
+    );
+  }
+
+  if (embeddingProvider === "openai_compatible" && !env.EMBEDDING_API_KEY) {
+    throw new ConfigError(
+      "EMBEDDING_API_KEY is required when EMBEDDING_PROVIDER is openai_compatible",
+    );
+  }
 
   return {
     databaseUrl,
     worktreeRoot,
     claudeCliPath: env.CLAUDE_CLI_PATH ?? DEFAULT_CLAUDE,
+    knowledgeBasePath:
+      env.KNOWLEDGE_BASE_PATH ?? DEFAULT_KNOWLEDGE_BASE_PATH,
+    embedding: {
+      provider: embeddingProvider,
+      baseUrl: env.EMBEDDING_BASE_URL ?? DEFAULT_EMBEDDING_BASE_URL,
+      apiKey: env.EMBEDDING_API_KEY,
+      model: env.EMBEDDING_MODEL ?? DEFAULT_EMBEDDING_MODEL,
+      dimensions: 768,
+    },
     ticketPattern: new RegExp(patternSource),
     repos,
     companionFallbackBranch:

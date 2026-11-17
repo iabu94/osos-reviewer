@@ -1,5 +1,34 @@
 export type RepoRole = "backend" | "frontend";
 
+export type DocumentCategory =
+  | "coding-standards"
+  | "architecture"
+  | "security";
+
+export type DocumentTechnology =
+  | "angular"
+  | "dotnet"
+  | "database"
+  | "general";
+
+export interface EmbeddingConfig {
+  provider: "openai_compatible" | "fake";
+  baseUrl?: string;
+  apiKey?: string;
+  model: string;
+  dimensions: 768;
+}
+
+export interface CodingStandardRule {
+  ruleText: string;
+  documentPath: string;
+  documentTitle: string;
+  section: string;
+  category: DocumentCategory;
+  technology: DocumentTechnology;
+  score: number;
+}
+
 export interface RepoConfig {
   id: string;
   role: RepoRole;
@@ -13,6 +42,8 @@ export interface AppConfig {
   databaseUrl: string;
   worktreeRoot: string;
   claudeCliPath: string;
+  knowledgeBasePath: string;
+  embedding: EmbeddingConfig;
   ticketPattern: RegExp;
   repos: RepoConfig[];
   companionFallbackBranch: string;

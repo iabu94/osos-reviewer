@@ -56,6 +56,7 @@ describe("runReview", () => {
       DATABASE_URL: "postgres://review:review@localhost:5433/review",
       WORKTREE_ROOT: worktreeRoot,
       CLAUDE_CLI_PATH: "claude",
+      EMBEDDING_PROVIDER: "fake",
       REPOS_JSON: JSON.stringify([
         {
           id: "be",
