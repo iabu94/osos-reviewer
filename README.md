@@ -58,6 +58,42 @@ pnpm --filter @review/orchestrator start -- \
   --target-branch develop
 ```
 
+## Phase 2: Document RAG
+
+Coding standards, architecture, and security docs are ingested into Postgres (pgvector) and served by the `get_coding_standards` MCP tool.
+
+**Knowledge base layout** (`knowledge-base/`, Markdown only):
+
+```text
+knowledge-base/
+  coding-standards/<technology>/*.md   # angular, dotnet, database, general
+  architecture/...
+  security/...
+```
+
+Category comes from the top-level folder and technology from the sub-folder.
+
+**Environment variables**
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `DATABASE_URL` | required | e.g. `postgres://review:review@localhost:5433/review` |
+| `KNOWLEDGE_BASE_PATH` | `knowledge-base` | Relative paths resolve from the repo root |
+| `EMBEDDING_PROVIDER` | `openai_compatible` | `fake` for tests/smoke (no API key needed) |
+| `EMBEDDING_BASE_URL` | `https://api.openai.com/v1` | |
+| `EMBEDDING_API_KEY` | | Required unless provider is `fake` |
+| `EMBEDDING_MODEL` | `text-embedding-3-small` | Vectors are 768-dimensional |
+
+**Ingest** (migrates, embeds, upserts changed docs, removes deleted ones, prints an `IngestReport` JSON):
+
+```bash
+pnpm --filter @review/knowledge ingest
+```
+
+**Smoke test:** `pnpm smoke:phase2` (or `EMBEDDING_PROVIDER=fake ./scripts/smoke-phase2.sh`).
+
+Only `get_coding_standards` is live. `trace_fe_be_integration`, `trace_symbol_impact`, and `check_reusability` remain Phase 1 stubs. The MCP server reads the same env vars lazily on the first standards call.
+
 ## Packages
 
 | Package | Role |
@@ -65,7 +101,8 @@ pnpm --filter @review/orchestrator start -- \
 | `@review/shared` | Config + shared types/errors |
 | `@review/db` | Postgres pool, migrate, health |
 | `@review/git-manager` | Ticket/companion, worktrees, focused diff |
-| `@review/mcp-server` | Four stub MCP tools over stdio |
+| `@review/knowledge` | Knowledge-base discovery, chunking, embeddings, ingest, retrieval |
+| `@review/mcp-server` | MCP tools over stdio: live `get_coding_standards` + three Phase 1 stubs |
 | `@review/orchestrator` | Review lifecycle + CLI |
 
 ## Spec & plan

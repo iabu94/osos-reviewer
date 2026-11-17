@@ -4,32 +4,69 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { handleTool, TOOL_NAMES } from "./tools/stubs.js";
+import {
+  createEnvStandardsDeps,
+  handleToolRouted,
+  TOOL_NAMES,
+  type RouterOptions,
+} from "./tools/router.js";
 
-export function createServer(): Server {
+const STANDARDS_INPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    query: { type: "string", minLength: 1 },
+    category: {
+      type: "string",
+      enum: ["coding-standards", "architecture", "security"],
+    },
+    technology: {
+      type: "string",
+      enum: ["angular", "dotnet", "database", "general"],
+    },
+    limit: { type: "integer", minimum: 1, maximum: 10 },
+  },
+  required: ["query"],
+};
+
+const STUB_INPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    query: { type: "string" },
+    repoIds: { type: "array", items: { type: "string" } },
+  },
+};
+
+export function createServer(options?: Partial<RouterOptions>): Server {
+  const routerOptions: RouterOptions = {
+    getStandardsDeps: options?.getStandardsDeps ?? createEnvStandardsDeps(),
+  };
   const server = new Server(
     { name: "review-mcp", version: "0.0.1" },
     { capabilities: { tools: {} } },
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: TOOL_NAMES.map((name) => ({
-      name,
-      description: `Stub Phase 1 tool: ${name}`,
-      inputSchema: {
-        type: "object",
-        properties: {
-          query: { type: "string" },
-          repoIds: { type: "array", items: { type: "string" } },
-        },
-      },
-    })),
+    tools: TOOL_NAMES.map((name) =>
+      name === "get_coding_standards"
+        ? {
+            name,
+            description:
+              "Retrieve relevant coding standards, architecture, and security rules from the ingested knowledge base using real vector retrieval (pgvector).",
+            inputSchema: STANDARDS_INPUT_SCHEMA,
+          }
+        : {
+            name,
+            description: `Stub Phase 1 tool: ${name}`,
+            inputSchema: STUB_INPUT_SCHEMA,
+          },
+    ),
   }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const result = await handleTool(
+    const result = await handleToolRouted(
       request.params.name,
       request.params.arguments ?? {},
+      routerOptions,
     );
     return {
       content: [{ type: "text", text: JSON.stringify(result) }],

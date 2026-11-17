@@ -11,20 +11,18 @@ export type McpToolResult = {
   error?: { code: string; message: string };
 };
 
-export const TOOL_NAMES = [
+export const STUB_TOOL_NAMES = [
   "trace_fe_be_integration",
   "trace_symbol_impact",
   "check_reusability",
-  "get_coding_standards",
 ] as const;
 
-export type ToolName = (typeof TOOL_NAMES)[number];
+export type StubToolName = (typeof STUB_TOOL_NAMES)[number];
 
-const EMPTY_DATA: Record<ToolName, unknown> = {
+const EMPTY_DATA: Record<StubToolName, unknown> = {
   trace_fe_be_integration: { mismatches: [] },
   trace_symbol_impact: { impacted: [] },
   check_reusability: { candidates: [] },
-  get_coding_standards: { rules: [] },
 };
 
 export async function handleTool(
@@ -33,7 +31,7 @@ export async function handleTool(
 ): Promise<McpToolResult> {
   toolInputSchema.safeParse(args ?? {});
 
-  if (!(TOOL_NAMES as readonly string[]).includes(name)) {
+  if (!(STUB_TOOL_NAMES as readonly string[]).includes(name)) {
     return {
       status: "service_error",
       data: null,
@@ -43,6 +41,6 @@ export async function handleTool(
 
   return {
     status: "no_results",
-    data: EMPTY_DATA[name as ToolName],
+    data: EMPTY_DATA[name as StubToolName],
   };
 }
