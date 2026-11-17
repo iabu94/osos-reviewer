@@ -1,0 +1,99 @@
+import { readdir, readFile } from "node:fs/promises";
+import { extname, parse, relative, resolve, sep } from "node:path";
+
+import type {
+  DocumentCategory,
+  DocumentTechnology,
+} from "@review/shared";
+
+const categories = new Set<DocumentCategory>([
+  "coding-standards",
+  "architecture",
+  "security",
+]);
+const technologies = new Set<DocumentTechnology>([
+  "angular",
+  "dotnet",
+  "database",
+]);
+
+export interface DiscoveredDocument {
+  absolutePath: string;
+  relativePath: string;
+  category: DocumentCategory;
+  technology: DocumentTechnology;
+  title: string;
+}
+
+async function collectMarkdownFiles(directory: string): Promise<string[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files = await Promise.all(
+    entries.map(async (entry) => {
+      const path = resolve(directory, entry.name);
+      if (entry.isDirectory()) {
+        return collectMarkdownFiles(path);
+      }
+      return entry.isFile() && extname(entry.name).toLowerCase() === ".md"
+        ? [path]
+        : [];
+    }),
+  );
+  return files.flat();
+}
+
+function readTitle(markdown: string, absolutePath: string): string {
+  let fenceCharacter: "`" | "~" | undefined;
+  for (const line of markdown.split(/\r?\n/)) {
+    const fence = /^\s{0,3}(`{3,}|~{3,})/.exec(line);
+    if (fence) {
+      const character = fence[1][0] as "`" | "~";
+      if (!fenceCharacter) {
+        fenceCharacter = character;
+      } else if (fenceCharacter === character) {
+        fenceCharacter = undefined;
+      }
+      continue;
+    }
+
+    if (!fenceCharacter) {
+      const heading = /^\s{0,3}#\s+(.+?)\s*#*\s*$/.exec(line);
+      if (heading) {
+        return heading[1];
+      }
+    }
+  }
+  return parse(absolutePath).name;
+}
+
+export async function discoverDocuments(
+  rootDir: string,
+): Promise<DiscoveredDocument[]> {
+  const root = resolve(rootDir);
+  const files = await collectMarkdownFiles(root);
+  const documents = await Promise.all(
+    files.map(async (absolutePath): Promise<DiscoveredDocument | null> => {
+      const relativePath = relative(root, absolutePath).split(sep).join("/");
+      const [categorySegment, technologySegment] = relativePath.split("/");
+      if (!categories.has(categorySegment as DocumentCategory)) {
+        return null;
+      }
+
+      const markdown = await readFile(absolutePath, "utf8");
+      return {
+        absolutePath,
+        relativePath,
+        category: categorySegment as DocumentCategory,
+        technology: technologies.has(
+          technologySegment as DocumentTechnology,
+        )
+          ? (technologySegment as DocumentTechnology)
+          : "general",
+        title: readTitle(markdown, absolutePath),
+      };
+    }),
+  );
+
+  return documents
+    .filter((document): document is DiscoveredDocument => document !== null)
+    .sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+}
