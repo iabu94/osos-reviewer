@@ -1,24 +1,41 @@
+import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Server } from "node:http";
 import { execa } from "execa";
 import { createPool, migrate } from "@review/db";
-import {
-  createLogger,
-  createReviewWorker,
-  resolvePrBranchesViaGithub,
-  runReview,
-} from "@review/orchestrator";
-import type { ReviewDeps } from "@review/orchestrator";
 import { loadConfig } from "@review/shared";
-import { createHttpTeamsMessenger } from "./messenger.js";
-import { createTeamsWebhookServer } from "./server.js";
+import {
+  createHttpTeamsMessenger,
+  createTeamsWebhookServer,
+} from "@review/teams";
+import { createLogger } from "./log.js";
+import { resolvePrBranchesViaGithub } from "./github-pr.js";
+import type { ReviewDeps } from "./review.js";
+import { runReview } from "./review.js";
+import { createReviewWorker } from "./worker.js";
+
+function resolveTsxBin(startDir: string): string {
+  let dir = startDir;
+  for (;;) {
+    const candidate = join(dir, "node_modules", ".bin", "tsx");
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) {
+      break;
+    }
+    dir = parent;
+  }
+  throw new Error("tsx binary not found in node_modules/.bin");
+}
 
 function resolveMcpLaunch(): { command: string; args: string[] } {
   const here = dirname(fileURLToPath(import.meta.url));
   const mcpEntry = resolve(here, "../../mcp-server/src/index.ts");
-  const tsxBin = resolve(here, "../../../node_modules/.bin/tsx");
+  const tsxBin = resolveTsxBin(here);
   return { command: tsxBin, args: [mcpEntry] };
 }
 

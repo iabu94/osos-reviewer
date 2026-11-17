@@ -16,7 +16,8 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "start": "tsx --env-file=../../.env src/cli.ts"
+    "start": "tsx --env-file=../../.env src/cli.ts",
+    "start:teams": "REQUIRE_TEAMS=true tsx --env-file=../../.env src/teams-cli.ts"
   },
   "dependencies": {
     "@review/code-intel": "workspace:*",

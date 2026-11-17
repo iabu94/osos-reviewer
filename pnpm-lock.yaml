@@ -218,28 +218,13 @@ importers:
 
   packages/teams:
     dependencies:
-      '@review/db':
-        specifier: workspace:*
-        version: link:../db
-      '@review/git-manager':
-        specifier: workspace:*
-        version: link:../git-manager
-      '@review/orchestrator':
-        specifier: workspace:*
-        version: link:../orchestrator
       '@review/shared':
         specifier: workspace:*
         version: link:../shared
-      execa:
-        specifier: ^9.5.2
-        version: 9.6.1
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
         version: 22.20.5
-      tsx:
-        specifier: ^4.19.2
-        version: 4.23.15
       typescript:
         specifier: ^5.7.2
         version: 5.9.3

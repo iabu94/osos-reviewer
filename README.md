@@ -176,7 +176,7 @@ Teams messages that mention **ReviewBot** and include a GitHub pull request URL 
 
 **Authentication:** POST bodies are authenticated with HMAC-SHA256 in the `x-review-signature` header (`sha256=<hex>` of the raw body, keyed by `TEAMS_WEBHOOK_SECRET`). Invalid signatures return `401` `{ error: "unauthorized" }`. Parse/validation failures return `400` with `error` (code) and `message`. This is a lightweight shared-secret check — not full Microsoft Bot Framework JWT validation (a future hardening step).
 
-**Environment (set `REQUIRE_TEAMS=true` for `pnpm --filter @review/teams start`):**
+**Environment (set `REQUIRE_TEAMS=true` via `pnpm --filter @review/orchestrator start:teams`):**
 
 | Variable | Role |
 |----------|------|
