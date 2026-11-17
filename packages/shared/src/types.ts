@@ -38,6 +38,19 @@ export interface RepoConfig {
   githubRepo?: string;
 }
 
+export type ReviewLifecycleStatus =
+  | "accepted"
+  | "running"
+  | "completed"
+  | "failed";
+
+export interface TeamsConversationRef {
+  serviceUrl: string;
+  conversationId: string;
+  activityId?: string;
+  replyToId?: string;
+}
+
 export interface AppConfig {
   databaseUrl: string;
   worktreeRoot: string;
@@ -48,12 +61,21 @@ export interface AppConfig {
   repos: RepoConfig[];
   companionFallbackBranch: string;
   reviewTimeoutMs: number;
+  teams: {
+    webhookSecret: string;
+    botAppId: string;
+    botPassword: string;
+    port: number;
+  };
+  githubToken?: string;
+  maxConcurrentReviews: number;
+  reviewRetryMax: number;
 }
 
 export interface ReviewRequest {
   prUrl: string;
   reviewId: string;
-  teamsThreadRef?: string;
+  teamsConversationRef?: TeamsConversationRef;
 }
 
 export interface ReviewMetadata {

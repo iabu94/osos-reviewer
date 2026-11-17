@@ -1,6 +1,27 @@
 import { describe, it, expect } from "vitest";
 import { loadConfig } from "./config.js";
 
+const baseEnv = {
+  DATABASE_URL: "postgres://review:review@localhost:5432/review",
+  WORKTREE_ROOT: "/tmp/review-worktrees",
+  CLAUDE_CLI_PATH: "claude",
+  EMBEDDING_PROVIDER: "fake",
+  REPOS_JSON: JSON.stringify([
+    {
+      id: "be",
+      role: "backend",
+      localPath: "/repos/be",
+      defaultBaseBranch: "develop",
+    },
+    {
+      id: "fe",
+      role: "frontend",
+      localPath: "/repos/fe",
+      defaultBaseBranch: "develop",
+    },
+  ]),
+} as const;
+
 describe("loadConfig", () => {
   it("parses REPOS_JSON and default ticket pattern", () => {
     const cfg = loadConfig({
@@ -89,5 +110,44 @@ describe("loadConfig", () => {
         EMBEDDING_PROVIDER: "openai_compatible",
       }),
     ).toThrow(/EMBEDDING_API_KEY/);
+  });
+
+  it("loads Teams and concurrency settings when REQUIRE_TEAMS=true", () => {
+    const cfg = loadConfig({
+      ...baseEnv,
+      REQUIRE_TEAMS: "true",
+      TEAMS_WEBHOOK_SECRET: "sec",
+      TEAMS_BOT_APP_ID: "app",
+      TEAMS_BOT_PASSWORD: "pwd",
+      TEAMS_WEBHOOK_PORT: "3099",
+      MAX_CONCURRENT_REVIEWS: "1",
+      REVIEW_RETRY_MAX: "3",
+      GITHUB_TOKEN: "gh",
+    });
+    expect(cfg.teams.port).toBe(3099);
+    expect(cfg.teams.webhookSecret).toBe("sec");
+    expect(cfg.maxConcurrentReviews).toBe(1);
+    expect(cfg.reviewRetryMax).toBe(3);
+    expect(cfg.githubToken).toBe("gh");
+  });
+
+  it("throws ConfigError when REQUIRE_TEAMS=true and secret missing", () => {
+    expect(() =>
+      loadConfig({
+        ...baseEnv,
+        REQUIRE_TEAMS: "true",
+        TEAMS_BOT_APP_ID: "a",
+        TEAMS_BOT_PASSWORD: "b",
+      }),
+    ).toThrow(/TEAMS_WEBHOOK_SECRET/);
+  });
+
+  it("allows empty Teams settings when REQUIRE_TEAMS is unset", () => {
+    const cfg = loadConfig({ ...baseEnv });
+    expect(cfg.teams.port).toBe(3080);
+    expect(cfg.teams.webhookSecret).toBe("");
+    expect(cfg.maxConcurrentReviews).toBe(2);
+    expect(cfg.reviewRetryMax).toBe(2);
+    expect(cfg.githubToken).toBeUndefined();
   });
 });

@@ -28,8 +28,10 @@ export type {
   SymbolEvidence,
   RepoConfig,
   RepoRole,
+  ReviewLifecycleStatus,
   ReviewRequest,
   ReviewMetadata,
   ReviewResult,
   SymbolType,
+  TeamsConversationRef,
 } from "./types.js";

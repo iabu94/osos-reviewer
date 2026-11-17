@@ -10,6 +10,21 @@ const DEFAULT_KNOWLEDGE_BASE_PATH = "knowledge-base";
 const DEFAULT_EMBEDDING_PROVIDER = "openai_compatible";
 const DEFAULT_EMBEDDING_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
+const DEFAULT_TEAMS_WEBHOOK_PORT = 3080;
+const DEFAULT_MAX_CONCURRENT_REVIEWS = 2;
+const DEFAULT_REVIEW_RETRY_MAX = 2;
+
+function requireTeamsEnv(
+  env: NodeJS.ProcessEnv,
+  key: string,
+  label: string,
+): string {
+  const value = env[key];
+  if (!value) {
+    throw new ConfigError(`${label} is required when REQUIRE_TEAMS is true`);
+  }
+  return value;
+}
 
 const repoSchema = z.object({
   id: z.string().min(1),
@@ -67,6 +82,27 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     );
   }
 
+  const requireTeams = env.REQUIRE_TEAMS === "true";
+  const teamsWebhookSecret = requireTeams
+    ? requireTeamsEnv(env, "TEAMS_WEBHOOK_SECRET", "TEAMS_WEBHOOK_SECRET")
+    : (env.TEAMS_WEBHOOK_SECRET ?? "");
+  const teamsBotAppId = requireTeams
+    ? requireTeamsEnv(env, "TEAMS_BOT_APP_ID", "TEAMS_BOT_APP_ID")
+    : (env.TEAMS_BOT_APP_ID ?? "");
+  const teamsBotPassword = requireTeams
+    ? requireTeamsEnv(env, "TEAMS_BOT_PASSWORD", "TEAMS_BOT_PASSWORD")
+    : (env.TEAMS_BOT_PASSWORD ?? "");
+
+  const teamsPort = env.TEAMS_WEBHOOK_PORT
+    ? Number(env.TEAMS_WEBHOOK_PORT)
+  : DEFAULT_TEAMS_WEBHOOK_PORT;
+  const maxConcurrentReviews = env.MAX_CONCURRENT_REVIEWS
+    ? Number(env.MAX_CONCURRENT_REVIEWS)
+    : DEFAULT_MAX_CONCURRENT_REVIEWS;
+  const reviewRetryMax = env.REVIEW_RETRY_MAX
+    ? Number(env.REVIEW_RETRY_MAX)
+    : DEFAULT_REVIEW_RETRY_MAX;
+
   return {
     databaseUrl,
     worktreeRoot,
@@ -87,5 +123,14 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
     reviewTimeoutMs: env.REVIEW_TIMEOUT_MS
       ? Number(env.REVIEW_TIMEOUT_MS)
       : DEFAULT_TIMEOUT_MS,
+    teams: {
+      webhookSecret: teamsWebhookSecret,
+      botAppId: teamsBotAppId,
+      botPassword: teamsBotPassword,
+      port: teamsPort,
+    },
+    githubToken: env.GITHUB_TOKEN || undefined,
+    maxConcurrentReviews,
+    reviewRetryMax,
   };
 }
