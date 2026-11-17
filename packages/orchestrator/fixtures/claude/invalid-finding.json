@@ -1,0 +1,18 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "structured_output": {
+    "summary": "Invalid evidence",
+    "findings": [
+      {
+        "category": "other",
+        "severity": "low",
+        "confidence": "confirmed",
+        "title": "t",
+        "description": "d",
+        "evidence": ""
+      }
+    ]
+  }
+}

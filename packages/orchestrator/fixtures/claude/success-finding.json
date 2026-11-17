@@ -1,0 +1,22 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "duration_ms": 1500,
+  "usage": {
+    "input_tokens": 100
+  },
+  "structured_output": {
+    "summary": "One integration mismatch found",
+    "findings": [
+      {
+        "category": "integration",
+        "severity": "high",
+        "confidence": "confirmed",
+        "title": "FE calls missing BE route",
+        "description": "Angular service posts to /api/order but no matching controller action.",
+        "evidence": "HTTP POST /api/order in OrderService; no backend endpoint for that path."
+      }
+    ]
+  }
+}
