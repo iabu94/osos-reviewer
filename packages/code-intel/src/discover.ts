@@ -19,6 +19,24 @@ function isSourceFile(name: string, role: RepoRole): boolean {
   return name.endsWith(".ts") || name.endsWith(".tsx");
 }
 
+/** Whether a `/`-separated relative path would be returned by `discoverSourceFiles`. */
+export function isDiscoverableSourcePath(
+  relativePath: string,
+  role: RepoRole,
+): boolean {
+  const segments = relativePath.split("/");
+  const name = segments.pop() ?? "";
+  if (segments.some((s) => s === "" || s === "." || s === "..")) {
+    return false;
+  }
+  for (const segment of segments) {
+    if (ALWAYS_SKIPPED_DIRS.has(segment) || SKIPPED_DIRS[role].has(segment)) {
+      return false;
+    }
+  }
+  return isSourceFile(name, role);
+}
+
 async function walk(
   root: string,
   relativeDir: string,

@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@review/db": "workspace:*",
+    "@review/git-manager": "workspace:*",
     "@review/knowledge": "workspace:*",
     "@review/shared": "workspace:*",
     "pg": "^8.13.1",

@@ -13,6 +13,9 @@ importers:
       '@review/db':
         specifier: workspace:*
         version: link:../db
+      '@review/git-manager':
+        specifier: workspace:*
+        version: link:../git-manager
       '@review/knowledge':
         specifier: workspace:*
         version: link:../knowledge
