@@ -9,3 +9,14 @@ export {
   MAX_FINDINGS_IN_CARD,
   type AdaptiveCard,
 } from "./adaptive-card.js";
+
+export { verifyTeamsSignature } from "./auth.js";
+export {
+  parseTeamsTrigger,
+  type ParseTeamsTriggerResult,
+} from "./parse-trigger.js";
+export {
+  createFakeTeamsMessenger,
+  createHttpTeamsMessenger,
+  type TeamsMessenger,
+} from "./messenger.js";

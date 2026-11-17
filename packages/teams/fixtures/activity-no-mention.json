@@ -1,0 +1,9 @@
+{
+  "type": "message",
+  "id": "activity-no-mention-001",
+  "text": "Please review https://github.com/acme/widgets/pull/42 when you have time",
+  "serviceUrl": "https://smba.trafficmanager.net/amer/",
+  "conversation": {
+    "id": "19:conv-no-mention@thread.tacv2"
+  }
+}

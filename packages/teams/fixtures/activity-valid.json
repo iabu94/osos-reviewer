@@ -1,0 +1,10 @@
+{
+  "type": "message",
+  "id": "activity-valid-001",
+  "text": "Hi @ReviewBot please review https://github.com/acme/widgets/pull/1 thanks",
+  "serviceUrl": "https://smba.trafficmanager.net/amer/",
+  "conversation": {
+    "id": "19:conv-valid@thread.tacv2"
+  },
+  "replyToId": "activity-valid-001"
+}
