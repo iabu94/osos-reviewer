@@ -136,8 +136,12 @@ export function buildReviewAdaptiveCard(
 
   if (result.status === "failed") {
     const code = result.error?.code;
+    const message = result.error?.message?.trim();
     if (code) {
       facts.push({ title: "Error", value: code });
+    }
+    if (message) {
+      facts.push({ title: "Reason", value: message });
     }
   }
 

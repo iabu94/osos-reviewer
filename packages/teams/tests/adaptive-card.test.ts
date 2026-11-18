@@ -97,19 +97,24 @@ describe("buildReviewAdaptiveCard", () => {
     ]);
   });
 
-  it("failed card uses Failed status and Error fact", () => {
+  it("failed card uses Failed status plus Error and Reason facts", () => {
     const card = buildReviewAdaptiveCard(
       {
         reviewId: "r",
         status: "failed",
-        error: { code: "claude_timeout", message: "timed out" },
+        error: {
+          code: "ticket_unresolved",
+          message: "Ticket identifier could not be resolved",
+        },
       },
       { prUrl: PR_URL, headSha: "deadbeef" },
     );
     const texts = JSON.stringify(card.content);
     expect(texts).toContain("AI review of pbsgears/ososerp-web#6880");
     expect(texts).toContain("Failed");
-    expect(texts).toContain("claude_timeout");
+    expect(texts).toContain("ticket_unresolved");
+    expect(texts).toContain('"title":"Reason"');
+    expect(texts).toContain("Ticket identifier could not be resolved");
     expect(texts).toContain('"title":"Findings"');
     expect(texts).toContain("none");
     expect(card.content.actions?.[0]).toMatchObject({
