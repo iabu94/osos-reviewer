@@ -7,7 +7,7 @@
     "apps/*"
   ],
   "scripts": {
-    "start": "npm run start:teams -w @review/orchestrator",
+    "start": "npm run start:teams -w @review/api",
     "test": "npm run test --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",

@@ -27,3 +27,8 @@ export {
 export { createLogger } from "./log.js";
 export { createReviewWorker } from "./worker.js";
 export type { ReviewWorker, ReviewWorkerDeps, EnqueueInput } from "./worker.js";
+export {
+  createTeamsRuntime,
+  resolveMcpLaunch,
+} from "./teams-runtime.js";
+export type { TeamsRuntime } from "./teams-runtime.js";
