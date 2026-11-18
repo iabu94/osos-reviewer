@@ -1,26 +1,37 @@
 # Cursor Review Platform
 
-Teams-triggered, token-efficient cross-repository code review orchestrator (Centroniz). Phase 1 delivers the local foundation: config, Postgres/pgvector, Git worktrees, MCP stubs, and Claude Code headless invocation.
+Teams-triggered, token-efficient cross-repository code review orchestrator (Centroniz). A Microsoft Teams mention with a GitHub PR URL runs a focused review across backend (.NET) and frontend (Angular) repos via Claude Code, MCP tools, Postgres/pgvector indexes, and Adaptive Card replies.
 
-## Phase 1 architecture
+Phases 1–6 are implemented: foundation, document RAG, code intelligence, MCP review tools, structured Claude review, and Teams webhook delivery.
+
+## Architecture
 
 ```text
-CLI / local trigger
+Microsoft Teams (ReviewBot mention + PR URL)
       |
       v
-Orchestrator (@review/orchestrator)
+Teams webhook (@review/teams)  --HMAC-->  202 accepted
       |
-      +-- parse PR URL + ticket id
+      v
+Review worker (@review/orchestrator)
+      |
+      +-- resolve PR branches (GitHub API)
       +-- Git worktrees + focused diff (@review/git-manager)
-      +-- Claude Code headless (claude -p)
+      +-- PR delta code index (@review/code-intel)
+      +-- Claude Code headless (claude -p, structured JSON)
       |         |
       |         v
-      |   MCP server stubs (@review/mcp-server)
+      |   MCP tools (@review/mcp-server)
+      |     trace_fe_be_integration
+      |     trace_symbol_impact
+      |     check_reusability
+      |     get_coding_standards  <-- knowledge RAG (@review/knowledge)
       |
-      +-- PostgreSQL + pgvector health (@review/db)
+      +-- Adaptive Card reply to Teams thread
+      +-- PostgreSQL + pgvector (@review/db)
 ```
 
-Later phases add document RAG, AST code intelligence, real MCP tools, and Microsoft Teams.
+Local CLI reviews skip Teams and call the same `runReview` path directly.
 
 ## Prerequisites
 
@@ -28,6 +39,7 @@ Later phases add document RAG, AST code intelligence, real MCP tools, and Micros
 - pnpm 9+
 - Docker (for Postgres)
 - Optional: Claude Code CLI (`claude`) for live reviews
+- Optional: OpenAI-compatible embeddings API for real RAG/code vectors (`EMBEDDING_PROVIDER=fake` for local smoke)
 
 ## Setup
 
@@ -39,17 +51,55 @@ docker compose up -d
 
 The orchestrator CLI loads `.env` via `tsx --env-file=../../.env`. Postgres is published on **host port 5433** (avoids clashing with a local Postgres on 5432).
 
-## Test
+Create the test database when running DB-backed suites:
+
+```bash
+docker compose exec db psql -U review -c 'CREATE DATABASE review_test;'
+export TEST_DATABASE_URL=postgres://review:review@localhost:5433/review_test
+```
+
+## Environment
+
+| Variable | Default / notes |
+|----------|-----------------|
+| `DATABASE_URL` | required — e.g. `postgres://review:review@localhost:5433/review` |
+| `TEST_DATABASE_URL` | tests only; must differ from `DATABASE_URL` (suites truncate tables) |
+| `WORKTREE_ROOT` | required — worktree parent directory |
+| `REPOS_JSON` | required — single-quoted JSON array of repo configs (`id`, `role`, `localPath`, `defaultBaseBranch`, optional `githubRepo`) |
+| `CLAUDE_CLI_PATH` | `claude` |
+| `COMPANION_FALLBACK_BRANCH` | `origin/develop` |
+| `REVIEW_TIMEOUT_MS` | `120000` |
+| `REQUIRE_DB` | `false` — set `true` for PR delta indexing during reviews |
+| `KNOWLEDGE_BASE_PATH` | `knowledge-base` (relative to repo root) |
+| `EMBEDDING_PROVIDER` | `openai_compatible` or `fake` |
+| `EMBEDDING_BASE_URL` | `https://api.openai.com/v1` |
+| `EMBEDDING_API_KEY` | required unless provider is `fake` |
+| `EMBEDDING_MODEL` | `text-embedding-3-small` (768-d vectors) |
+| `REQUIRE_TEAMS` | `false` — `start:teams` forces `true` |
+| `TEAMS_WEBHOOK_SECRET` | HMAC secret for inbound webhooks (quote if it contains `=`) |
+| `TEAMS_REPLY_FLOW_URL` | Power Automate HTTP URL for Adaptive Card replies (Teams App path) |
+| `TEAMS_BOT_APP_ID` / `TEAMS_BOT_PASSWORD` | Bot Connector OAuth alternative (unused when flow URL is set) |
+| `TEAMS_WEBHOOK_PORT` | `3080` |
+| `GITHUB_TOKEN` | resolves PR head/base via GitHub API (required for Teams path) |
+| `MAX_CONCURRENT_REVIEWS` | `2` |
+| `REVIEW_RETRY_MAX` | `2` |
+
+## Test & smoke
 
 ```bash
 pnpm test
-# or
-./scripts/smoke-phase1.sh
+pnpm smoke:phase1   # foundation
+pnpm smoke:phase2   # document RAG (fake embeddings OK)
+pnpm smoke:phase3   # code intelligence
+pnpm smoke:phase4   # MCP tools
+pnpm smoke:phase5   # Claude structured review (unit fixtures only)
+pnpm smoke:phase6   # Teams webhook + Adaptive Card path
+pnpm bench:phase6   # worker timing with fake runReview → bench-phase6-out.json
 ```
 
-## Local review (Phase 1)
+## Local CLI review
 
-Configure `REPOS_JSON` with local clones and `githubRepo` values matching the PR host/owner/repo. Branch resolution is manual until GitHub API wiring:
+Configure `REPOS_JSON` with local clones and `githubRepo` values matching the PR host/owner/repo. For CLI-only runs without GitHub API, pass branches explicitly:
 
 ```bash
 pnpm --filter @review/orchestrator start -- \
@@ -58,9 +108,11 @@ pnpm --filter @review/orchestrator start -- \
   --target-branch develop
 ```
 
-## Phase 2: Document RAG
+With `REQUIRE_DB=true`, the review indexes changed files as `index_scope = 'pr'` rows tagged with the `reviewId` (baseline rows are never modified). PR rows are always deleted in the lifecycle `finally`.
 
-Coding standards, architecture, and security docs are ingested into Postgres (pgvector) and served by the `get_coding_standards` MCP tool.
+## Document RAG
+
+Coding standards, architecture, and security docs are ingested into Postgres (pgvector) and served by `get_coding_standards`.
 
 **Knowledge base layout** (`knowledge-base/`, Markdown only):
 
@@ -73,71 +125,44 @@ knowledge-base/
 
 Category comes from the top-level folder and technology from the sub-folder.
 
-**Environment variables**
-
-| Variable | Default | Notes |
-|----------|---------|-------|
-| `DATABASE_URL` | required | e.g. `postgres://review:review@localhost:5433/review` |
-| `KNOWLEDGE_BASE_PATH` | `knowledge-base` | Absolute, or relative to the repository root (never the current directory) |
-| `TEST_DATABASE_URL` | unset | Tests only; e.g. `postgres://review:review@localhost:5433/review_test`. DB tests are skipped without it and refuse to run against `DATABASE_URL` |
-| `EMBEDDING_PROVIDER` | `openai_compatible` | `fake` for tests/smoke (no API key needed) |
-| `EMBEDDING_BASE_URL` | `https://api.openai.com/v1` | |
-| `EMBEDDING_API_KEY` | | Required unless provider is `fake` |
-| `EMBEDDING_MODEL` | `text-embedding-3-small` | Vectors are 768-dimensional; stored per chunk as `provider:model` |
-
-**Ingest** (migrates, embeds, upserts changed docs, removes deleted ones, prints an `IngestReport` JSON):
-
 ```bash
 pnpm --filter @review/knowledge ingest
 ```
 
-- Unchanged documents are skipped only when both file content and embedding model match; changing `EMBEDDING_PROVIDER`/`EMBEDDING_MODEL` re-embeds everything, and retrieval only returns chunks from the current model.
-- If discovery finds zero documents, ingest refuses to delete the existing index. Pass `--force-empty` (`pnpm --filter @review/knowledge ingest --force-empty`) to clear it intentionally.
+- Unchanged documents are skipped only when both file content and embedding model match; changing `EMBEDDING_PROVIDER`/`EMBEDDING_MODEL` re-embeds everything.
+- If discovery finds zero documents, ingest refuses to delete the existing index. Pass `--force-empty` to clear it intentionally.
 - Markdown under unknown top-level folders is skipped with a warning on stderr.
 
-**Tests:** DB-backed suites truncate tables, so they use a separate database (`TEST_DATABASE_URL`, created on demand) and never touch the real index:
+## Code intelligence
 
-```bash
-export TEST_DATABASE_URL=postgres://review:review@localhost:5433/review_test
-pnpm test
-```
-
-**Smoke test:** `pnpm smoke:phase2` (or `EMBEDDING_PROVIDER=fake ./scripts/smoke-phase2.sh`). It runs tests against `review_test`, then ingests into the real `DATABASE_URL` so the index is left populated.
-
-See **Phase 4** below for the code-intelligence MCP tools. The MCP server lazily initializes Postgres and the embedder from env on the first tool call.
-
-## Phase 3: Code intelligence
-
-`@review/code-intel` indexes code symbols and relationships into Postgres (`code_symbols` plus relationship rows, pgvector embeddings) so later phases can answer cross-repo questions without re-reading whole trees.
+`@review/code-intel` indexes symbols and relationships into Postgres (`code_symbols` plus relationship rows, pgvector embeddings).
 
 **Parsers**
 
-- **.NET backend (`.cs`)**: `tree-sitter` + `tree-sitter-c-sharp` (controllers, services, DTOs, DbContext, validators).
-- **Angular frontend (`.ts`)**: the TypeScript compiler API (components, services, interfaces/models).
+- **.NET (`.cs`)**: `tree-sitter` + `tree-sitter-c-sharp` (controllers, services, DTOs, DbContext, validators).
+- **Angular (`.ts`)**: TypeScript compiler API (components, services, interfaces/models).
 
-**Baseline index** (default branch; `index_scope = 'baseline'`). Unchanged files (by content hash) are skipped, stale symbols are replaced, and deleted files are removed:
+**Baseline index** (default branch; `index_scope = 'baseline'`):
 
 ```bash
 pnpm --filter @review/code-intel index-baseline --repo-id be
 pnpm --filter @review/code-intel index-baseline --repo-id fe
 ```
 
-**Delta on review.** When `REQUIRE_DB=true`, `runReview` indexes only the files changed on each PR branch (primary and companion worktrees) as `index_scope = 'pr'` rows tagged with the `reviewId`, after the focused diff and before Claude runs. Baseline rows are never modified. PR rows are always deleted in the lifecycle `finally` (even when Claude or indexing fails). An indexing error fails the review with `error.code = "index_failed"`.
+Unchanged files (by content hash) are skipped; stale symbols are replaced; deleted files are removed. An indexing error during review fails with `error.code = "index_failed"`.
 
-**Smoke test:** `pnpm smoke:phase3` (or `EMBEDDING_PROVIDER=fake ./scripts/smoke-phase3.sh`) runs the code-intel, git-manager, and orchestrator tests, then baseline-indexes the fixture trees into the test database.
+## MCP review tools
 
-## Phase 4: MCP review tools
-
-All four MCP tools are live. They read the same Postgres code index and knowledge base as Phase 2–3, with structured JSON results bounded under 12 000 characters.
+All four MCP tools are live. They read the same Postgres code index and knowledge base, with structured JSON results bounded under 12 000 characters.
 
 | Tool | Purpose |
 |------|---------|
 | `trace_fe_be_integration` | Cross-repo FE/BE contract mismatches |
 | `trace_symbol_impact` | Relationship impact from a seed symbol |
 | `check_reusability` | Similar-symbol candidates for reuse review |
-| `get_coding_standards` | Document RAG (unchanged from Phase 2) |
+| `get_coding_standards` | Document RAG |
 
-**Example MCP arguments**
+**Example arguments**
 
 ```json
 { "backendRepoIds": ["be"], "frontendRepoIds": ["fe"] }
@@ -151,61 +176,62 @@ All four MCP tools are live. They read the same Postgres code index and knowledg
 { "query": "list orders from api", "repoIds": ["be"], "limit": 5 }
 ```
 
-`check_reusability` explanations use **candidate** wording — they are hints for human review, not proof of duplication. When any embeddings exist in the searched scope, the vector path is preferred and name-only matches for symbols without embeddings may not appear (Task 4 retrieval behavior).
+`check_reusability` explanations use **candidate** wording — hints for human review, not proof of duplication. The MCP server lazily initializes Postgres and the embedder from env on the first tool call.
 
-**Smoke test:** `pnpm smoke:phase4` (or `EMBEDDING_PROVIDER=fake ./scripts/smoke-phase4.sh`) indexes happy-path and deliberate-mismatch fixtures into `TEST_DATABASE_URL`, then runs `@review/code-intel` and `@review/mcp-server` tests.
+## Claude structured review
 
-## Phase 5 — Claude structured review
+The orchestrator builds a structured review prompt (`buildReviewPrompt`), invokes Claude Code headless with `--permission-mode dontAsk`, JSON output, and `REVIEW_OUTPUT_JSON_SCHEMA`, then validates stdout via `parseClaudeReviewOutput`. Successful runs attach `report` and token/duration `diagnostics` on `ReviewResult`; the CLI prints the full JSON payload.
 
-The orchestrator builds a structured review prompt (`buildReviewPrompt`), invokes Claude Code in headless mode with `--permission-mode dontAsk`, JSON output, and `REVIEW_OUTPUT_JSON_SCHEMA` for structured findings, then validates stdout via `parseClaudeReviewOutput`. Successful runs attach `report` and token/duration `diagnostics` on `ReviewResult`; the CLI prints the full JSON payload.
+Allowed tools include read-only `Read` plus the four `mcp__review__*` MCP tools; edit/write/bash tools stay disallowed. Phase 5 smoke only runs unit tests (no live invoke / billing).
 
-Allowed tools include read-only `Read` plus the four `mcp__review__*` MCP tools; edit/write/bash tools stay disallowed.
+## Microsoft Teams webhook
 
-Teams Adaptive Card delivery is deferred to Phase 6. If a real `claude` binary is on `PATH`, Phase 5 smoke still only runs unit tests (no live invoke / billing).
+Teams messages that mention **ReviewBot** and include a GitHub pull request URL trigger an asynchronous review.
 
-**Smoke test:** `pnpm smoke:phase5` (or `./scripts/smoke-phase5.sh`) runs `@review/orchestrator` tests with fake Claude fixtures.
-
-## Phase 6 — Microsoft Teams webhook
-
-Teams messages that mention **ReviewBot** and include a GitHub pull request URL trigger an asynchronous review. The HTTP server (`@review/teams`) exposes:
+```bash
+pnpm --filter @review/orchestrator start:teams
+```
 
 | Route | Response |
 |-------|-----------|
-| `POST /hooks/teams` | `202` `{ reviewId, duplicated, status: "accepted" }` after enqueue |
+| `POST /teams-hook` | Teams Outgoing Webhook: `Authorization: HMAC …` → `200` message ack; or `x-review-signature: sha256=…` → `202` `{ reviewId, duplicated, status: "accepted" }` |
 | `GET /healthz` | `200` `{ ok: true }` |
 
-**Authentication:** POST bodies are authenticated with HMAC-SHA256 in the `x-review-signature` header (`sha256=<hex>` of the raw body, keyed by `TEAMS_WEBHOOK_SECRET`). Invalid signatures return `401` `{ error: "unauthorized" }`. Parse/validation failures return `400` with `error` (code) and `message`. This is a lightweight shared-secret check — not full Microsoft Bot Framework JWT validation (a future hardening step).
+**Authentication:** POST bodies use HMAC-SHA256 in `x-review-signature` (`sha256=<hex>` of the raw body, keyed by `TEAMS_WEBHOOK_SECRET`). Invalid signatures return `401`. Parse/validation failures return `400` with `error` and `message`. This is a shared-secret check — not full Microsoft Bot Framework JWT validation (future hardening).
 
-**Environment (set `REQUIRE_TEAMS=true` via `pnpm --filter @review/orchestrator start:teams`):**
+**Behavior:** The webhook returns **202 immediately**; the in-process worker runs `runReview`, builds an Adaptive Card (completed summary/findings, failed state, or `NO_FINDINGS_SUMMARY`), and posts it to the originating thread via **Power Automate** (`TEAMS_REPLY_FLOW_URL`) or Bot Connector when bot credentials are set. The flow receives JSON with `serviceUrl`, `conversationId`, `activityId`, `replyToId`, `contentType`, and `card`. **Idempotency** uses Teams activity id or a hash of conversation + PR URL (`reviews.idempotency_key`); duplicate terminal reviews return `duplicated: true` without re-running. **Concurrency** is enforced with a semaphore (`MAX_CONCURRENT_REVIEWS`).
 
-| Variable | Role |
-|----------|------|
-| `TEAMS_WEBHOOK_SECRET` | HMAC secret for inbound webhooks |
-| `TEAMS_BOT_APP_ID` / `TEAMS_BOT_PASSWORD` | Bot Connector OAuth for Adaptive Card replies |
-| `TEAMS_WEBHOOK_PORT` | Listen port (default `3080`) |
-| `GITHUB_TOKEN` | Resolves PR head/base branches via GitHub API |
-| `MAX_CONCURRENT_REVIEWS` | Worker concurrency (default `2`) |
-| `REVIEW_RETRY_MAX` | Retries for retryable failures (e.g. Teams delivery) |
+## GitHub PR review delivery
 
-**Behavior:** The webhook returns **202 immediately**; the in-process worker runs `runReview`, builds an Adaptive Card (completed summary/findings, failed state, or `NO_FINDINGS_SUMMARY`), and posts it to the originating thread via Bot Connector. **Idempotency** uses Teams activity id or a hash of conversation + PR URL (`reviews.idempotency_key`); duplicate terminal reviews return `duplicated: true` without re-running. **Concurrency** is enforced in the worker with a semaphore (`MAX_CONCURRENT_REVIEWS`).
+When `GITHUB_TOKEN` is set and `GITHUB_REVIEW_DELIVERY` is not `false`, the Teams worker also posts a GitHub **`COMMENT`** pull-request review to the trigger PR (never `APPROVE` / `REQUEST_CHANGES`). Delivery order is GitHub then Teams.
 
-**Smoke / bench:** `pnpm smoke:phase6` runs package tests plus a signed fixture POST to an ephemeral server (prints `Phase 6 smoke OK`). `pnpm bench:phase6` runs one worker job with a fake `runReview` (diagnostics only) and writes `bench-phase6-out.json` (exits `0`; warns if wall clock > 30s).
+- **Summary body** includes the review summary (or exact `NO_FINDINGS_SUMMARY` / failure code) plus an HTML marker `<!-- review-orchestrator:reviewId=… -->` used for idempotent skip on retries.
+- **Inline comments** (max 20) only for findings whose path is on the PR files list, with a positive `lineStart`, and whose `repo` matches the trigger PR (`owner/repo` or bare `repo`) or is omitted. Cross-repo / missing-line findings stay in the review body only.
+- Local CLI `runReview` does **not** post to GitHub; only the Teams worker path does.
+- Set `GITHUB_REVIEW_DELIVERY=false` to keep Teams-only delivery.
 
 ## Packages
 
 | Package | Role |
 |---------|------|
 | `@review/shared` | Config + shared types/errors |
-| `@review/db` | Postgres pool, migrate, health |
+| `@review/db` | Postgres pool, migrate, health, reviews lifecycle |
 | `@review/git-manager` | Ticket/companion, worktrees, focused diff |
-| `@review/code-intel` | Tree-sitter/TypeScript symbol parsing, baseline + PR delta indexing, retrieval |
+| `@review/code-intel` | Symbol parsing, baseline + PR delta indexing, retrieval |
 | `@review/knowledge` | Knowledge-base discovery, chunking, embeddings, ingest, retrieval |
-| `@review/mcp-server` | MCP tools over stdio: integration, impact, reusability, and coding standards |
-| `@review/orchestrator` | Review lifecycle + CLI |
-| `@review/teams` | Teams webhook, Adaptive Cards, Bot Connector client |
+| `@review/mcp-server` | MCP tools over stdio |
+| `@review/orchestrator` | Review lifecycle, CLI, Teams worker + `start:teams` |
+| `@review/teams` | Webhook server, Adaptive Cards, Bot Connector client |
 
-## Spec & plan
+## Spec & plans
 
 - Spec: `docs/superpowers/specs/2026-11-16-review-orchestrator-prd.md`
-- Phase 1 plan: `docs/superpowers/plans/2026-11-16-phase1-foundation.md`
-- Phase 3 plan: `docs/superpowers/plans/2026-11-17-phase3-code-intelligence.md`
+- GitHub delivery design: `docs/superpowers/specs/2026-11-18-github-review-delivery-design.md`
+- Product brief: `refs/PRD.md`
+- Phase 1: `docs/superpowers/plans/2026-11-16-phase1-foundation.md`
+- Phase 2: `docs/superpowers/plans/2026-11-17-phase2-document-rag.md`
+- Phase 3: `docs/superpowers/plans/2026-11-17-phase3-code-intelligence.md`
+- Phase 4: `docs/superpowers/plans/2026-11-17-phase4-mcp-review-capabilities.md`
+- Phase 5: `docs/superpowers/plans/2026-11-17-phase5-claude-code-review.md`
+- Phase 6: `docs/superpowers/plans/2026-11-17-phase6-teams-integration.md`
+- Phase 7: `docs/superpowers/plans/2026-11-18-phase7-github-review-delivery.md`
