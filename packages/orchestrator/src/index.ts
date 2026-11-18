@@ -7,7 +7,20 @@ export {
 } from "./review-schema.js";
 export { runReview, parsePrUrl } from "./review.js";
 export type { ReviewDeps, PrBranches } from "./review.js";
-export { resolvePrBranchesViaGithub } from "./github-pr.js";
+export {
+  fetchGithubPullDetails,
+  resolvePrBranchesViaGithub,
+} from "./github-pr.js";
+export type { GithubPullDetails } from "./github-pr.js";
+export {
+  createGithubReviewPoster,
+  GithubDeliveryError,
+} from "./github-review.js";
+export type { GithubReviewPoster } from "./github-review.js";
+export {
+  buildGithubReviewPayload,
+  reviewIdMarker,
+} from "./github-review-markdown.js";
 export { createLogger } from "./log.js";
 export { createReviewWorker } from "./worker.js";
 export type { ReviewWorker, ReviewWorkerDeps, EnqueueInput } from "./worker.js";
