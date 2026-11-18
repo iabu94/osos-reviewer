@@ -13,15 +13,37 @@ function omitSecretFields(
   return out;
 }
 
+function formatValue(value: unknown): string {
+  if (value === null || value === undefined) {
+    return String(value);
+  }
+  if (typeof value === "string") {
+    return /\s/.test(value) ? JSON.stringify(value) : value;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return JSON.stringify(value);
+}
+
+function formatFields(fields: Record<string, unknown>): string {
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(fields)) {
+    parts.push(`${key}=${formatValue(value)}`);
+  }
+  return parts.join(" ");
+}
+
 export function createLogger(base: Record<string, unknown> = {}) {
   const write = (level: string, msg: string, fields?: Record<string, unknown>) => {
-    const line = JSON.stringify({
-      timestamp: new Date().toISOString(),
-      level,
-      msg,
+    const merged = {
       ...omitSecretFields(base),
       ...(fields ? omitSecretFields(fields) : {}),
-    });
+    };
+    const extras = formatFields(merged);
+    const line = extras
+      ? `${new Date().toISOString()} ${level.toUpperCase().padEnd(5)} ${msg}  ${extras}`
+      : `${new Date().toISOString()} ${level.toUpperCase().padEnd(5)} ${msg}`;
     process.stdout.write(`${line}\n`);
   };
 

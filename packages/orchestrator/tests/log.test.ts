@@ -6,17 +6,15 @@ describe("createLogger", () => {
     vi.restoreAllMocks();
   });
 
-  it("writes JSON with timestamp, level, and msg", () => {
+  it("writes human-readable lines with timestamp, level, and msg", () => {
     const spy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     const log = createLogger({ reviewId: "r1" });
     log.info("started");
     expect(spy).toHaveBeenCalledOnce();
-    const line = String(spy.mock.calls[0]![0]);
-    const parsed = JSON.parse(line.trimEnd());
-    expect(parsed.level).toBe("info");
-    expect(parsed.msg).toBe("started");
-    expect(parsed.reviewId).toBe("r1");
-    expect(typeof parsed.timestamp).toBe("string");
+    const line = String(spy.mock.calls[0]![0]).trimEnd();
+    expect(line).toMatch(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z INFO {2}started {2}reviewId=r1$/,
+    );
   });
 
   it("omits secret-looking field keys", () => {
@@ -29,11 +27,12 @@ describe("createLogger", () => {
       apiSecret: "s",
       safe: "ok",
     });
-    const parsed = JSON.parse(String(spy.mock.calls[0]![0]).trimEnd());
-    expect(parsed.safe).toBe("ok");
-    expect(parsed.token).toBeUndefined();
-    expect(parsed.password).toBeUndefined();
-    expect(parsed.authorization).toBeUndefined();
-    expect(parsed.apiSecret).toBeUndefined();
+    const line = String(spy.mock.calls[0]![0]).trimEnd();
+    expect(line).toContain("safe=ok");
+    expect(line).not.toContain("token=");
+    expect(line).not.toContain("password=");
+    expect(line).not.toContain("authorization=");
+    expect(line).not.toContain("apiSecret=");
+    expect(line).not.toContain("secret-value");
   });
 });
