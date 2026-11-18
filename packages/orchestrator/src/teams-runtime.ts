@@ -57,7 +57,7 @@ export async function createTeamsRuntime(
   const pool = createPool(config.databaseUrl);
   await migrate(pool);
 
-  const logger = createLogger({ component: "teams-webhook" });
+  const logger = createLogger();
   logger.info("worktree root ready", { worktreeRoot: config.worktreeRoot });
   const messenger: TeamsMessenger = config.teams.replyFlowUrl
     ? createPowerAutomateTeamsMessenger({

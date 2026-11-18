@@ -1,11 +1,13 @@
 const SECRET_KEY = /password|token|secret|authorization/i;
+/** Noisy identity fields — omit from terminal lines (still usable by callers). */
+const OMIT_TERMINAL_KEYS = new Set(["component", "reviewId"]);
 
 function omitSecretFields(
   fields: Record<string, unknown>,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(fields)) {
-    if (SECRET_KEY.test(key)) {
+    if (SECRET_KEY.test(key) || OMIT_TERMINAL_KEYS.has(key)) {
       continue;
     }
     out[key] = value;
