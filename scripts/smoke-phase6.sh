@@ -31,10 +31,10 @@ for _ in $(seq 1 30); do
 done
 
 echo "==> Package tests (@review/teams, orchestrator, db, shared)"
-pnpm --filter @review/teams test
-pnpm --filter @review/orchestrator test
-pnpm --filter @review/db test
-pnpm --filter @review/shared test
+npm run test -w @review/teams
+npm run test -w @review/orchestrator
+npm run test -w @review/db
+npm run test -w @review/shared
 
 echo "==> Ephemeral signed webhook POST"
 TSX="$ROOT/packages/orchestrator/node_modules/.bin/tsx"

@@ -20,13 +20,13 @@
     "start:teams": "REQUIRE_TEAMS=true tsx --env-file=../../.env src/teams-cli.ts"
   },
   "dependencies": {
-    "@review/code-intel": "workspace:*",
-    "@review/knowledge": "workspace:*",
-    "@review/db": "workspace:*",
-    "@review/git-manager": "workspace:*",
-    "@review/mcp-server": "workspace:*",
-    "@review/shared": "workspace:*",
-    "@review/teams": "workspace:*",
+    "@review/code-intel": "*",
+    "@review/knowledge": "*",
+    "@review/db": "*",
+    "@review/git-manager": "*",
+    "@review/mcp-server": "*",
+    "@review/shared": "*",
+    "@review/teams": "*",
     "execa": "^9.5.2",
     "zod": "^3.24.1"
   },

@@ -19,8 +19,8 @@
     "ingest": "tsx src/cli.ts"
   },
   "dependencies": {
-    "@review/db": "workspace:*",
-    "@review/shared": "workspace:*",
+    "@review/db": "*",
+    "@review/shared": "*",
     "pg": "^8.13.1"
   },
   "devDependencies": {

@@ -19,10 +19,10 @@
     "index-baseline": "tsx src/cli.ts"
   },
   "dependencies": {
-    "@review/db": "workspace:*",
-    "@review/git-manager": "workspace:*",
-    "@review/knowledge": "workspace:*",
-    "@review/shared": "workspace:*",
+    "@review/db": "*",
+    "@review/git-manager": "*",
+    "@review/knowledge": "*",
+    "@review/shared": "*",
     "pg": "^8.13.1",
     "tree-sitter": "0.21.1",
     "tree-sitter-c-sharp": "0.23.1",

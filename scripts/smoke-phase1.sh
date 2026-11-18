@@ -18,10 +18,10 @@ for i in $(seq 1 30); do
 done
 
 echo "==> Running unit tests"
-pnpm test
+npm test
 
 echo "==> DB health via @review/db tests"
-pnpm --filter @review/db test -- client.test.ts
+npm run test -w @review/db -- client.test.ts
 
 if command -v claude >/dev/null 2>&1; then
   echo "==> claude CLI found (real headless invoke is optional; skipped in smoke)"

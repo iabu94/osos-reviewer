@@ -2,10 +2,15 @@
   "name": "cursor-review-platform",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
-    "test": "pnpm -r --workspace-concurrency=1 --if-present test",
-    "build": "pnpm -r --if-present build",
-    "typecheck": "pnpm -r --if-present typecheck",
+    "start": "npm run start:teams -w @review/orchestrator",
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
     "smoke:phase1": "bash ./scripts/smoke-phase1.sh",
     "smoke:phase2": "bash ./scripts/smoke-phase2.sh",
     "smoke:phase3": "bash ./scripts/smoke-phase3.sh",
@@ -16,6 +21,5 @@
   },
   "engines": {
     "node": ">=22"
-  },
-  "packageManager": "pnpm@9.15.0"
+  }
 }

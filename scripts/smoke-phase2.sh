@@ -43,13 +43,13 @@ fi
 
 echo "==> Running knowledge + MCP server tests against $TEST_DATABASE_URL"
 # Tests create the test database on demand and never touch DATABASE_URL.
-pnpm --filter @review/db test
-pnpm --filter @review/knowledge test
-pnpm --filter @review/mcp-server test
+npm run test -w @review/db
+npm run test -w @review/knowledge
+npm run test -w @review/mcp-server
 
 echo "==> Migrating and ingesting knowledge base (EMBEDDING_PROVIDER=$EMBEDDING_PROVIDER)"
 # Ingest last so the real index is populated when smoke finishes.
-pnpm --filter @review/knowledge ingest
+npm run ingest -w @review/knowledge
 
 echo "==> Verifying real index is populated"
 if command -v psql >/dev/null 2>&1; then

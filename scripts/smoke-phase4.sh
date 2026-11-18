@@ -65,12 +65,12 @@ export REPOS_JSON="[
 ]"
 export WORKTREE_ROOT="$TMP/worktrees"
 for repo in be fe be-bad fe-bad; do
-  DATABASE_URL="$TEST_DATABASE_URL" pnpm --filter @review/code-intel index-baseline --repo-id "$repo"
+  DATABASE_URL="$TEST_DATABASE_URL" npm run index-baseline -w @review/code-intel --repo-id "$repo"
 done
 
 echo "==> Running @review/code-intel and @review/mcp-server tests against $TEST_DATABASE_URL"
-pnpm --filter @review/code-intel test
-pnpm --filter @review/mcp-server test
+npm run test -w @review/code-intel
+npm run test -w @review/mcp-server
 
 echo "==> Verifying indexed symbols in test database"
 if command -v psql >/dev/null 2>&1; then

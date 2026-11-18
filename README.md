@@ -36,7 +36,7 @@ Local CLI reviews skip Teams and call the same `runReview` path directly.
 ## Prerequisites
 
 - Node.js 22+
-- pnpm 9+
+- npm 10+
 - Docker (for Postgres)
 - Optional: Claude Code CLI (`claude`) for live reviews
 - Optional: OpenAI-compatible embeddings API for real RAG/code vectors (`EMBEDDING_PROVIDER=fake` for local smoke)
@@ -44,7 +44,7 @@ Local CLI reviews skip Teams and call the same `runReview` path directly.
 ## Setup
 
 ```bash
-pnpm install
+npm install
 cp .env.example .env   # edit REPOS_JSON / paths; REPOS_JSON is single-quoted JSON
 docker compose up -d
 ```
@@ -87,14 +87,14 @@ export TEST_DATABASE_URL=postgres://review:review@localhost:5433/review_test
 ## Test & smoke
 
 ```bash
-pnpm test
-pnpm smoke:phase1   # foundation
-pnpm smoke:phase2   # document RAG (fake embeddings OK)
-pnpm smoke:phase3   # code intelligence
-pnpm smoke:phase4   # MCP tools
-pnpm smoke:phase5   # Claude structured review (unit fixtures only)
-pnpm smoke:phase6   # Teams webhook + Adaptive Card path
-pnpm bench:phase6   # worker timing with fake runReview → bench-phase6-out.json
+npm test
+npm run smoke:phase1   # foundation
+npm run smoke:phase2   # document RAG (fake embeddings OK)
+npm run smoke:phase3   # code intelligence
+npm run smoke:phase4   # MCP tools
+npm run smoke:phase5   # Claude structured review (unit fixtures only)
+npm run smoke:phase6   # Teams webhook + Adaptive Card path
+npm run bench:phase6   # worker timing with fake runReview → bench-phase6-out.json
 ```
 
 ## Local CLI review
@@ -102,7 +102,7 @@ pnpm bench:phase6   # worker timing with fake runReview → bench-phase6-out.jso
 Configure `REPOS_JSON` with local clones and `githubRepo` values matching the PR host/owner/repo. For CLI-only runs without GitHub API, pass branches explicitly:
 
 ```bash
-pnpm --filter @review/orchestrator start -- \
+npm run start -w @review/orchestrator -- \
   --pr-url https://github.com/acme/backend/pull/1 \
   --primary-branch feature/ABC-123 \
   --target-branch develop
@@ -126,7 +126,7 @@ knowledge-base/
 Category comes from the top-level folder and technology from the sub-folder.
 
 ```bash
-pnpm --filter @review/knowledge ingest
+npm run ingest -w @review/knowledge
 ```
 
 - Unchanged documents are skipped only when both file content and embedding model match; changing `EMBEDDING_PROVIDER`/`EMBEDDING_MODEL` re-embeds everything.
@@ -145,8 +145,8 @@ pnpm --filter @review/knowledge ingest
 **Baseline index** (default branch; `index_scope = 'baseline'`):
 
 ```bash
-pnpm --filter @review/code-intel index-baseline --repo-id be
-pnpm --filter @review/code-intel index-baseline --repo-id fe
+npm run index-baseline -w @review/code-intel -- --repo-id be
+npm run index-baseline -w @review/code-intel -- --repo-id fe
 ```
 
 Unchanged files (by content hash) are skipped; stale symbols are replaced; deleted files are removed. An indexing error during review fails with `error.code = "index_failed"`.
@@ -189,7 +189,7 @@ Allowed tools include read-only `Read` plus the four `mcp__review__*` MCP tools;
 Teams messages that mention **ReviewBot** and include a GitHub pull request URL trigger an asynchronous review.
 
 ```bash
-pnpm --filter @review/orchestrator start:teams
+npm run start:teams -w @review/orchestrator
 ```
 
 | Route | Response |
