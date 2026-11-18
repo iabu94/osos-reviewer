@@ -208,6 +208,7 @@ When `GITHUB_TOKEN` is set and `GITHUB_REVIEW_DELIVERY` is not `false`, the Team
 
 - **Summary body** includes the review summary (or exact `NO_FINDINGS_SUMMARY` / failure code) plus an HTML marker `<!-- review-orchestrator:reviewId=… -->` used for idempotent skip on retries.
 - **Inline comments** (max 20) only for findings whose path is on the PR files list, with a positive `lineStart`, and whose `repo` matches the trigger PR (`owner/repo` or bare `repo`) or is omitted. Cross-repo / missing-line findings stay in the review body only.
+- **Label** `ai-review:completed` is applied to the PR after a successful (`completed`) review delivery (including idempotent skip retries). Failed reviews are not labeled.
 - Local CLI `runReview` does **not** post to GitHub; only the Teams worker path does.
 - Set `GITHUB_REVIEW_DELIVERY=false` to keep Teams-only delivery.
 

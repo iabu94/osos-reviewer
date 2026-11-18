@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  AI_REVIEW_COMPLETED_LABEL,
   createGithubReviewPoster,
   GithubDeliveryError,
 } from "../src/github-review.js";
@@ -12,6 +13,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 describe("createGithubReviewPoster", () => {
   it("creates COMMENT review with commit_id and marker", async () => {
     const posts: Array<{ url: string; body: unknown }> = [];
+    const labelPosts: Array<{ url: string; body: unknown }> = [];
     const fetchImpl = async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/pulls/1") && !url.includes("/reviews") && !url.includes("/files")) {
@@ -38,6 +40,11 @@ describe("createGithubReviewPoster", () => {
           },
           201,
         );
+      }
+      if (url.includes("/issues/1/labels") && init?.method === "POST") {
+        const body = JSON.parse(String(init.body));
+        labelPosts.push({ url, body });
+        return jsonResponse([{ name: AI_REVIEW_COMPLETED_LABEL }], 200);
       }
       throw new Error(`unexpected ${url} ${init?.method}`);
     };
@@ -66,10 +73,17 @@ describe("createGithubReviewPoster", () => {
     expect((posts[0]!.body as { body: string }).body).toContain(
       reviewIdMarker("rev1"),
     );
+    expect(labelPosts).toEqual([
+      {
+        url: "https://api.github.com/repos/acme/be/issues/1/labels",
+        body: { labels: [AI_REVIEW_COMPLETED_LABEL] },
+      },
+    ]);
   });
 
-  it("skips when marker already present", async () => {
-    let postCount = 0;
+  it("skips review post but still labels completed reviews", async () => {
+    let reviewPostCount = 0;
+    const labelPosts: unknown[] = [];
     const fetchImpl = async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/pulls/1") && !url.includes("/reviews") && !url.includes("/files")) {
@@ -87,9 +101,13 @@ describe("createGithubReviewPoster", () => {
           { id: 1, body: `prior\n${reviewIdMarker("rev1")}\n` },
         ]);
       }
-      if (init?.method === "POST") {
-        postCount++;
+      if (url.includes("/pulls/1/reviews") && init?.method === "POST") {
+        reviewPostCount++;
         return jsonResponse({}, 201);
+      }
+      if (url.includes("/issues/1/labels") && init?.method === "POST") {
+        labelPosts.push(JSON.parse(String(init.body)));
+        return jsonResponse([{ name: AI_REVIEW_COMPLETED_LABEL }], 200);
       }
       throw new Error(`unexpected ${url}`);
     };
@@ -109,7 +127,48 @@ describe("createGithubReviewPoster", () => {
       title: "feat: demo",
       headSha: "abc123",
     });
-    expect(postCount).toBe(0);
+    expect(reviewPostCount).toBe(0);
+    expect(labelPosts).toEqual([{ labels: [AI_REVIEW_COMPLETED_LABEL] }]);
+  });
+
+  it("does not label failed reviews", async () => {
+    const labelPosts: unknown[] = [];
+    const fetchImpl = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/pulls/1") && !url.includes("/reviews") && !url.includes("/files")) {
+        return jsonResponse({
+          title: "feat: demo",
+          head: { ref: "feat", sha: "abc123" },
+          base: { ref: "main" },
+        });
+      }
+      if (url.includes("/pulls/1/files")) {
+        return jsonResponse([]);
+      }
+      if (url.includes("/pulls/1/reviews") && (!init?.method || init.method === "GET")) {
+        return jsonResponse([]);
+      }
+      if (url.includes("/pulls/1/reviews") && init?.method === "POST") {
+        return jsonResponse({ id: 99 }, 201);
+      }
+      if (url.includes("/issues/1/labels") && init?.method === "POST") {
+        labelPosts.push(JSON.parse(String(init.body)));
+        return jsonResponse([], 200);
+      }
+      throw new Error(`unexpected ${url}`);
+    };
+
+    const poster = createGithubReviewPoster({ token: "t", fetchImpl });
+    await poster.postReview({
+      prUrl: "https://github.com/acme/be/pull/1",
+      result: {
+        reviewId: "rev1",
+        status: "failed",
+        error: { code: "claude_timeout", message: "timed out" },
+      },
+    });
+
+    expect(labelPosts).toEqual([]);
   });
 
   it("throws GithubDeliveryError on 500", async () => {
@@ -127,7 +186,7 @@ describe("createGithubReviewPoster", () => {
       if (url.includes("/pulls/1/reviews") && (!init?.method || init.method === "GET")) {
         return jsonResponse([]);
       }
-      if (init?.method === "POST") {
+      if (url.includes("/pulls/1/reviews") && init?.method === "POST") {
         return new Response("fail", { status: 500 });
       }
       throw new Error(`unexpected ${url}`);
@@ -157,5 +216,47 @@ describe("createGithubReviewPoster", () => {
         },
       }),
     ).rejects.toBeInstanceOf(GithubDeliveryError);
+  });
+
+  it("throws GithubDeliveryError when labeling fails", async () => {
+    const fetchImpl = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/pulls/1") && !url.includes("/reviews") && !url.includes("/files")) {
+        return jsonResponse({
+          title: "feat: demo",
+          head: { ref: "feat", sha: "abc123" },
+          base: { ref: "main" },
+        });
+      }
+      if (url.includes("/pulls/1/files")) {
+        return jsonResponse([]);
+      }
+      if (url.includes("/pulls/1/reviews") && (!init?.method || init.method === "GET")) {
+        return jsonResponse([]);
+      }
+      if (url.includes("/pulls/1/reviews") && init?.method === "POST") {
+        return jsonResponse({ id: 99 }, 201);
+      }
+      if (url.includes("/issues/1/labels") && init?.method === "POST") {
+        return new Response("fail", { status: 500 });
+      }
+      throw new Error(`unexpected ${url}`);
+    };
+
+    const poster = createGithubReviewPoster({ token: "t", fetchImpl });
+    await expect(
+      poster.postReview({
+        prUrl: "https://github.com/acme/be/pull/1",
+        result: {
+          reviewId: "rev1",
+          status: "completed",
+          report: { summary: "ok", findings: [] },
+        },
+      }),
+    ).rejects.toMatchObject({
+      name: "GithubDeliveryError",
+      code: "github_delivery_failed",
+      message: expect.stringContaining("add label failed"),
+    });
   });
 });
