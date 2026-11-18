@@ -34,10 +34,21 @@ function formatFields(fields: Record<string, unknown>): string {
   return parts.join(" ");
 }
 
+export type LogOptions = {
+  /** When false, skip logger base fields (e.g. component). Default true. */
+  base?: boolean;
+};
+
 export function createLogger(base: Record<string, unknown> = {}) {
-  const write = (level: string, msg: string, fields?: Record<string, unknown>) => {
+  const write = (
+    level: string,
+    msg: string,
+    fields?: Record<string, unknown>,
+    options?: LogOptions,
+  ) => {
+    const useBase = options?.base !== false;
     const merged = {
-      ...omitSecretFields(base),
+      ...(useBase ? omitSecretFields(base) : {}),
       ...(fields ? omitSecretFields(fields) : {}),
     };
     const extras = formatFields(merged);
@@ -48,14 +59,14 @@ export function createLogger(base: Record<string, unknown> = {}) {
   };
 
   return {
-    info(msg: string, fields?: Record<string, unknown>) {
-      write("info", msg, fields);
+    info(msg: string, fields?: Record<string, unknown>, options?: LogOptions) {
+      write("info", msg, fields, options);
     },
-    warn(msg: string, fields?: Record<string, unknown>) {
-      write("warn", msg, fields);
+    warn(msg: string, fields?: Record<string, unknown>, options?: LogOptions) {
+      write("warn", msg, fields, options);
     },
-    error(msg: string, fields?: Record<string, unknown>) {
-      write("error", msg, fields);
+    error(msg: string, fields?: Record<string, unknown>, options?: LogOptions) {
+      write("error", msg, fields, options);
     },
   };
 }

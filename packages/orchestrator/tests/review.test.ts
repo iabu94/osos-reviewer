@@ -158,7 +158,10 @@ describe("runReview", () => {
       { ...baseDeps(config, claude, "feature/ABC-123"), logger },
     );
     expect(result.status).toBe("completed");
-    const infos = logger.info.mock.calls.map((c) => c[0] as string);
+    const stageCalls = logger.info.mock.calls.filter((c) =>
+      String(c[0]).startsWith("review stage:"),
+    );
+    const infos = stageCalls.map((c) => c[0] as string);
     expect(infos).toEqual(
       expect.arrayContaining([
         "review stage: claim worktree",
@@ -172,6 +175,10 @@ describe("runReview", () => {
         "review stage: cleanup",
       ]),
     );
+    for (const call of stageCalls) {
+      expect(call[1]).toBeUndefined();
+      expect(call[2]).toEqual({ base: false });
+    }
   });
 
   it("fails on unresolved ticket and cleans worktrees", async () => {

@@ -116,11 +116,9 @@ export async function runReview(
   const created: Array<{ repoPath: string; worktreePath: string }> = [];
   let claimedReviewDir: string | null = null;
   let pool: ReturnType<typeof createPool> | null = null;
-  const log = (
-    msg: string,
-    fields?: Record<string, unknown>,
-  ): void => {
-    deps.logger?.info(msg, { reviewId: request.reviewId, ...fields });
+  const log = (msg: string): void => {
+    // Stage progress: message only (no component / reviewId / repoId extras).
+    deps.logger?.info(msg, undefined, { base: false });
   };
 
   const cleanup = async () => {
@@ -231,7 +229,7 @@ export async function runReview(
       }
     }
 
-    log("review stage: resolve PR branches", { prUrl: request.prUrl });
+    log("review stage: resolve PR branches");
     const parsed = parsePrUrl(request.prUrl);
     const primary = findPrimaryRepo(deps.config, parsed.owner, parsed.repo);
     const companion = findCompanionRepo(deps.config, primary.id);
@@ -252,10 +250,7 @@ export async function runReview(
       };
     }
 
-    log("review stage: resolve companion branch", {
-      ticketId,
-      companionRepoId: companion.id,
-    });
+    log("review stage: resolve companion branch");
     const companionBranches = await deps.listRemoteBranches(
       companion.localPath,
     );
@@ -281,10 +276,7 @@ export async function runReview(
       throw err;
     }
 
-    log("review stage: create primary worktree", {
-      repoId: primary.id,
-      branch: branches.primaryBranch,
-    });
+    log("review stage: create primary worktree");
     const primaryWt = await createWorktree({
       repoPath: primary.localPath,
       worktreeRoot: deps.config.worktreeRoot,
@@ -298,11 +290,7 @@ export async function runReview(
     });
     worktrees.push(primaryWt.worktreePath);
 
-    log("review stage: create companion worktree", {
-      repoId: companion.id,
-      branch: companionResolution.branch,
-      usedFallback: companionResolution.usedFallback,
-    });
+    log("review stage: create companion worktree");
     const companionWt = await createWorktree({
       repoPath: companion.localPath,
       worktreeRoot: deps.config.worktreeRoot,
@@ -316,14 +304,12 @@ export async function runReview(
     });
     worktrees.push(companionWt.worktreePath);
 
-    log("review stage: compute focused diff", {
-      targetBranch: branches.targetBranch,
-    });
+    log("review stage: compute focused diff");
     const diff = await focusedDiff({
       worktreePath: primaryWt.worktreePath,
       targetBranch: branches.targetBranch,
     });
-    log("review stage: focused diff ready", { diffChars: diff.length });
+    log("review stage: focused diff ready");
 
     if (deps.requireDb) {
       pool = (deps.dbPoolFactory ?? createPool)(deps.config.databaseUrl);
@@ -347,7 +333,7 @@ export async function runReview(
       ];
       try {
         for (const t of targets) {
-          log("review stage: index PR delta", { repoId: t.repo.id });
+          log("review stage: index PR delta");
           await index({
             pool,
             repoId: t.repo.id,
@@ -397,9 +383,7 @@ export async function runReview(
       backendRepoIds: repoIdsByRole(deps.config, "backend"),
       frontendRepoIds: repoIdsByRole(deps.config, "frontend"),
     });
-    log("review stage: run Claude review", {
-      timeoutMs: deps.config.reviewTimeoutMs,
-    });
+    log("review stage: run Claude review");
     const runClaude = deps.runClaude ?? runClaudeReview;
     const claude = await runClaude({
       prompt,
@@ -410,10 +394,7 @@ export async function runReview(
       cwd: primaryWt.worktreePath,
       addDirs: [companionWt.worktreePath],
     });
-    log("review stage: Claude review returned", {
-      exitCode: claude.exitCode,
-      timedOut: claude.timedOut,
-    });
+    log("review stage: Claude review returned");
 
     if (claude.timedOut) {
       return {
