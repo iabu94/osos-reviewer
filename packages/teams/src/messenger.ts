@@ -118,9 +118,11 @@ export function createHttpTeamsMessenger(opts: {
 
 /**
  * Posts Adaptive Card replies to a Power Automate HTTP trigger.
- * Expected flow body shape (map these in the PA schema):
- *   serviceUrl, conversationId, activityId?, replyToId?,
- *   contentType, card
+ *
+ * Body shape for PA mapping:
+ *   parentMessageId ← replyToId (falls back to activityId for top-level @mentions)
+ *   For each attachments → messageBody ← item()?['content']
+ *   (card / contentType kept for direct triggerBody mappings)
  */
 export function createPowerAutomateTeamsMessenger(opts: {
   flowUrl: string;
@@ -134,13 +136,19 @@ export function createPowerAutomateTeamsMessenger(opts: {
       ref: TeamsConversationRef,
       card: { contentType: string; content: unknown },
     ): Promise<void> {
+      const replyToId = ref.replyToId ?? ref.activityId;
+      const attachment = {
+        contentType: card.contentType,
+        content: card.content,
+      };
       const body = {
         serviceUrl: ref.serviceUrl,
         conversationId: ref.conversationId,
         activityId: ref.activityId,
-        replyToId: ref.replyToId,
+        replyToId,
         contentType: card.contentType,
         card: card.content,
+        attachments: [attachment],
       };
 
       const res = await fetchImpl(flowUrl, {

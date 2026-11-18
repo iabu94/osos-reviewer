@@ -124,7 +124,43 @@ describe("Teams messenger", () => {
       replyToId: "parent-1",
       contentType: CARD_CONTENT_TYPE,
       card: { type: "AdaptiveCard" },
+      attachments: [
+        {
+          contentType: CARD_CONTENT_TYPE,
+          content: { type: "AdaptiveCard" },
+        },
+      ],
     });
+  });
+
+  it("Power Automate messenger falls back replyToId to activityId", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 202,
+      statusText: "Accepted",
+    });
+    const messenger = createPowerAutomateTeamsMessenger({
+      flowUrl: "https://example.com/flow",
+      fetchImpl: fetchImpl as typeof fetch,
+    });
+
+    await messenger.reply(
+      {
+        serviceUrl: "https://sm.test",
+        conversationId: "conv-1",
+        activityId: "act-1",
+      },
+      { contentType: CARD_CONTENT_TYPE, content: { type: "AdaptiveCard" } },
+    );
+
+    const body = JSON.parse(fetchImpl.mock.calls[0]![1]?.body as string);
+    expect(body.replyToId).toBe("act-1");
+    expect(body.attachments).toEqual([
+      {
+        contentType: CARD_CONTENT_TYPE,
+        content: { type: "AdaptiveCard" },
+      },
+    ]);
   });
 
   it("Power Automate messenger throws teams_delivery_failed on non-2xx", async () => {
