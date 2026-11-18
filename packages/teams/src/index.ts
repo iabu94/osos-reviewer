@@ -33,4 +33,11 @@ export {
   type CreateTeamsWebhookServerOpts,
   type TeamsWebhookWorker,
   type TeamsWebhookEnqueueInput,
+  type TeamsWebhookLogger,
 } from "./server.js";
+export {
+  handleTeamsHttpRequest,
+  type TeamsHttpRequest,
+  type TeamsHttpResult,
+  type HandleTeamsHttpRequestOpts,
+} from "./handle-request.js";

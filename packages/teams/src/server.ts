@@ -5,8 +5,7 @@ import {
   type ServerResponse,
 } from "node:http";
 import type { TeamsConversationRef } from "@review/shared";
-import { verifyTeamsRequest } from "./auth.js";
-import { parseTeamsTrigger } from "./parse-trigger.js";
+import { handleTeamsHttpRequest } from "./handle-request.js";
 
 export type TeamsWebhookLogger = {
   info(msg: string, fields?: Record<string, unknown>): void;
@@ -64,102 +63,30 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.end(payload);
 }
 
-function noopLogger(): TeamsWebhookLogger {
-  return {
-    info() {},
-    warn() {},
-    error() {},
-  };
-}
-
 export function createTeamsWebhookServer(
   opts: CreateTeamsWebhookServerOpts,
 ): Server {
-  const logger = opts.logger ?? noopLogger();
-
   return createServer(async (req, res) => {
-    try {
-      const method = req.method ?? "GET";
-      const path = req.url?.split("?")[0] ?? "";
+    const method = req.method ?? "GET";
+    const path = req.url?.split("?")[0] ?? "";
+    const needsBody = method === "POST" && path === "/teams-hook";
+    const rawBody = needsBody ? await readRawBody(req) : Buffer.alloc(0);
 
-      if (method === "GET" && path === "/healthz") {
-        sendJson(res, 200, { ok: true });
-        return;
-      }
+    const result = await handleTeamsHttpRequest(
+      {
+        method,
+        path,
+        headers: {
+          signature: headerValue(req, "x-review-signature"),
+          authorization: headerValue(req, "authorization"),
+        },
+        rawBody,
+      },
+      opts,
+    );
 
-      if (method === "POST" && path === "/teams-hook") {
-        const rawBody = await readRawBody(req);
-        const auth = verifyTeamsRequest(
-          rawBody,
-          {
-            signature: headerValue(req, "x-review-signature"),
-            authorization: headerValue(req, "authorization"),
-          },
-          opts.secret,
-        );
-        if (!auth.ok) {
-          sendJson(res, 401, { error: "unauthorized" });
-          return;
-        }
-
-        let activity: unknown;
-        try {
-          activity = JSON.parse(rawBody.toString("utf8"));
-        } catch {
-          sendJson(res, 400, {
-            error: "invalid_activity",
-            message: "Request body must be JSON",
-          });
-          return;
-        }
-
-        const parsed = parseTeamsTrigger(activity);
-        if (!parsed.ok) {
-          sendJson(res, 400, {
-            error: parsed.code,
-            message: parsed.message,
-          });
-          return;
-        }
-
-        const { reviewId, duplicated } = await opts.worker.enqueue({
-          prUrl: parsed.prUrl,
-          idempotencyKey: parsed.idempotencyKey,
-          teamsConversationRef: parsed.conversationRef,
-        });
-
-        logger.info("teams webhook accepted", {
-          reviewId,
-          duplicated,
-          authMode: auth.mode,
-        });
-
-        // Outgoing Webhooks require a Bot Framework message reply in-band.
-        if (auth.mode === "teams_hmac") {
-          sendJson(res, 200, {
-            type: "message",
-            text: duplicated
-              ? `Review already in progress (${reviewId}). I'll post findings in this thread.`
-              : `Review accepted (${reviewId}). I'll post findings in this thread.`,
-          });
-          return;
-        }
-
-        sendJson(res, 202, {
-          reviewId,
-          duplicated,
-          status: "accepted",
-        });
-        return;
-      }
-
-      sendJson(res, 404, { error: "not_found" });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      logger.error("teams webhook handler error", { err: message });
-      if (!res.headersSent) {
-        sendJson(res, 500, { error: "internal_error", message });
-      }
+    if (!res.headersSent) {
+      sendJson(res, result.status, result.body);
     }
   });
 }
