@@ -10,6 +10,7 @@ type ReviewDbPool = ReturnType<typeof createPool>;
 import { buildReviewAdaptiveCard } from "@review/teams";
 import type { AppConfig, ReviewResult, TeamsConversationRef } from "@review/shared";
 import type { TeamsMessenger } from "@review/teams";
+import type { GithubReviewPoster } from "./github-review.js";
 import type { ReviewLogger } from "./log.js";
 import { createLogger } from "./log.js";
 import type { ReviewDeps } from "./review.js";
@@ -19,6 +20,7 @@ const RETRYABLE_CODES = new Set([
   "claude_timeout",
   "db_unhealthy",
   "teams_delivery_failed",
+  "github_delivery_failed",
 ]);
 
 const TERMINAL_DUPLICATE_STATUSES = new Set([
@@ -70,6 +72,7 @@ export type ReviewWorkerDeps = {
   messenger: TeamsMessenger;
   runReview: typeof runReview;
   buildReviewDeps: (prUrl: string) => Promise<ReviewDeps>;
+  githubReviewPoster?: GithubReviewPoster | null;
   logger?: ReviewLogger;
   maxConcurrent?: number;
   retryMax?: number;
@@ -124,8 +127,10 @@ export function createReviewWorker(deps: ReviewWorkerDeps): ReviewWorker {
     teamsConversationRef: TeamsConversationRef,
   ) => {
     await semaphore.acquire();
+    logger.info("review started", { reviewId, prUrl });
     try {
       let last: ReviewResult | undefined;
+      let githubDelivered = false;
       for (let attempt = 0; attempt <= retryMax; attempt++) {
         await markReviewRunning(deps.pool, reviewId);
         last = await deps.runReview(
@@ -133,18 +138,53 @@ export function createReviewWorker(deps: ReviewWorkerDeps): ReviewWorker {
           await deps.buildReviewDeps(prUrl),
         );
 
-        try {
-          await deps.messenger.reply(
-            teamsConversationRef,
-            buildReviewAdaptiveCard(last),
-          );
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          last = {
-            ...last,
-            status: "failed",
-            error: { code: "teams_delivery_failed", message },
-          };
+        if (
+          deps.config.githubReviewDelivery &&
+          deps.githubReviewPoster &&
+          !githubDelivered
+        ) {
+          try {
+            logger.info("github review sending", {
+              reviewId,
+              status: last.status,
+            });
+            await deps.githubReviewPoster.postReview({
+              prUrl,
+              result: last,
+            });
+            githubDelivered = true;
+            logger.info("github review sent", { reviewId });
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.error("github review failed", { reviewId, err: message });
+            last = {
+              ...last,
+              status: "failed",
+              error: { code: "github_delivery_failed", message },
+            };
+          }
+        }
+
+        if (last.status !== "failed" || last.error?.code !== "github_delivery_failed") {
+          try {
+            logger.info("teams reply sending", {
+              reviewId,
+              status: last.status,
+            });
+            await deps.messenger.reply(
+              teamsConversationRef,
+              buildReviewAdaptiveCard(last),
+            );
+            logger.info("teams reply sent", { reviewId });
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.error("teams reply failed", { reviewId, err: message });
+            last = {
+              ...last,
+              status: "failed",
+              error: { code: "teams_delivery_failed", message },
+            };
+          }
         }
 
         if (last.status === "completed") {
@@ -159,6 +199,16 @@ export function createReviewWorker(deps: ReviewWorkerDeps): ReviewWorker {
         }
       }
       await markReviewFinished(deps.pool, reviewId, last!);
+      const finishFields = {
+        reviewId,
+        status: last!.status,
+        ...(last!.error?.code ? { errorCode: last!.error.code } : {}),
+      };
+      if (last!.status === "completed") {
+        logger.info("review finished", finishFields);
+      } else {
+        logger.error("review finished", finishFields);
+      }
     } catch (err) {
       await terminalizeUnexpectedError(reviewId, err);
     } finally {

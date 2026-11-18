@@ -13,6 +13,8 @@ import {
 import { NO_FINDINGS_SUMMARY, type AppConfig, type TeamsConversationRef } from "@review/shared";
 import { createFakeTeamsMessenger } from "@review/teams";
 import type { Pool } from "pg";
+import { GithubDeliveryError } from "../src/github-review.js";
+import type { GithubReviewPoster } from "../src/github-review.js";
 import { createReviewWorker } from "../src/worker.js";
 import type { ReviewDeps } from "../src/review.js";
 
@@ -53,12 +55,29 @@ function baseConfig(): AppConfig {
     reviewTimeoutMs: 1,
     teams: {
       webhookSecret: "s",
+      replyFlowUrl: "",
       botAppId: "id",
       botPassword: "pw",
       port: 3978,
     },
+    githubReviewDelivery: false,
     maxConcurrentReviews: 2,
     reviewRetryMax: 0,
+  };
+}
+
+function trackingPoster(
+  order: string[],
+  impl?: GithubReviewPoster["postReview"],
+): GithubReviewPoster {
+  return {
+    async postReview(input) {
+      order.push("github");
+      if (impl) {
+        return impl(input);
+      }
+      return { status: "created" };
+    },
   };
 }
 
@@ -329,6 +348,235 @@ describeDb("createReviewWorker", () => {
     expect(row?.status).toBe("failed");
     expect(row?.error_code).toBe("worker_error");
     expect(row?.error_message).toContain("github unavailable");
+  });
+
+  it("logs review start and completion", async () => {
+    const logger = {
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+    const reviewId = randomUUID().replace(/-/g, "");
+    const worker = createReviewWorker({
+      pool,
+      config: { ...baseConfig(), reviewRetryMax: 0 },
+      messenger: createFakeTeamsMessenger(),
+      logger,
+      runReview: async (req) => ({
+        reviewId: req.reviewId,
+        status: "completed",
+        report: { summary: NO_FINDINGS_SUMMARY, findings: [] },
+      }),
+      buildReviewDeps: async () => fakeDeps,
+      maxConcurrent: 1,
+      retryMax: 0,
+    });
+    await worker.enqueue({
+      prUrl,
+      idempotencyKey: "log-complete",
+      teamsConversationRef,
+      reviewId,
+    });
+    await worker.drain();
+    expect(logger.info).toHaveBeenCalledWith(
+      "review started",
+      expect.objectContaining({ reviewId, prUrl }),
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      "review finished",
+      expect.objectContaining({ reviewId, status: "completed" }),
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      "teams reply sent",
+      expect.objectContaining({ reviewId }),
+    );
+  });
+
+  it("posts GitHub before Teams on completed review", async () => {
+    const order: string[] = [];
+    const messenger = createFakeTeamsMessenger();
+    const wrappingMessenger = {
+      sent: messenger.sent,
+      async reply(...args: Parameters<typeof messenger.reply>) {
+        order.push("teams");
+        return messenger.reply(...args);
+      },
+    };
+    const worker = createReviewWorker({
+      pool,
+      config: { ...baseConfig(), githubReviewDelivery: true, reviewRetryMax: 0 },
+      messenger: wrappingMessenger,
+      githubReviewPoster: trackingPoster(order),
+      runReview: async (req) => ({
+        reviewId: req.reviewId,
+        status: "completed",
+        report: { summary: NO_FINDINGS_SUMMARY, findings: [] },
+      }),
+      buildReviewDeps: async () => fakeDeps,
+      maxConcurrent: 1,
+      retryMax: 0,
+    });
+    await worker.enqueue({
+      prUrl,
+      idempotencyKey: "gh-before-teams",
+      teamsConversationRef,
+      reviewId: randomUUID().replace(/-/g, ""),
+    });
+    await worker.drain();
+    expect(order).toEqual(["github", "teams"]);
+    expect(messenger.sent).toHaveLength(1);
+  });
+
+  it("skips GitHub when githubReviewDelivery false", async () => {
+    let githubCalls = 0;
+    const worker = createReviewWorker({
+      pool,
+      config: { ...baseConfig(), githubReviewDelivery: false, reviewRetryMax: 0 },
+      messenger: createFakeTeamsMessenger(),
+      githubReviewPoster: {
+        async postReview() {
+          githubCalls++;
+          return { status: "created" };
+        },
+      },
+      runReview: async (req) => ({
+        reviewId: req.reviewId,
+        status: "completed",
+        report: { summary: NO_FINDINGS_SUMMARY, findings: [] },
+      }),
+      buildReviewDeps: async () => fakeDeps,
+      maxConcurrent: 1,
+      retryMax: 0,
+    });
+    await worker.enqueue({
+      prUrl,
+      idempotencyKey: "gh-disabled",
+      teamsConversationRef,
+      reviewId: randomUUID().replace(/-/g, ""),
+    });
+    await worker.drain();
+    expect(githubCalls).toBe(0);
+  });
+
+  it("retries github_delivery_failed without double post after success", async () => {
+    let githubCalls = 0;
+    let replyAttempts = 0;
+    const messenger = createFakeTeamsMessenger();
+    const failingMessenger = {
+      sent: messenger.sent,
+      async reply(...args: Parameters<typeof messenger.reply>) {
+        replyAttempts++;
+        if (replyAttempts === 1) {
+          throw new Error("delivery down");
+        }
+        return messenger.reply(...args);
+      },
+    };
+    const worker = createReviewWorker({
+      pool,
+      config: { ...baseConfig(), githubReviewDelivery: true, reviewRetryMax: 1 },
+      messenger: failingMessenger,
+      githubReviewPoster: {
+        async postReview() {
+          githubCalls++;
+          return { status: "created" };
+        },
+      },
+      runReview: async (req) => ({
+        reviewId: req.reviewId,
+        status: "completed",
+        report: { summary: NO_FINDINGS_SUMMARY, findings: [] },
+      }),
+      buildReviewDeps: async () => fakeDeps,
+      maxConcurrent: 1,
+      retryMax: 1,
+    });
+    await worker.enqueue({
+      prUrl,
+      idempotencyKey: "gh-once-teams-retry",
+      teamsConversationRef,
+      reviewId: randomUUID().replace(/-/g, ""),
+    });
+    await worker.drain();
+    expect(githubCalls).toBe(1);
+    expect(replyAttempts).toBe(2);
+    expect(messenger.sent).toHaveLength(1);
+  });
+
+  it("does not call Teams when GitHub fails on an attempt", async () => {
+    const messenger = createFakeTeamsMessenger();
+    const worker = createReviewWorker({
+      pool,
+      config: { ...baseConfig(), githubReviewDelivery: true, reviewRetryMax: 0 },
+      messenger,
+      githubReviewPoster: {
+        async postReview() {
+          throw new GithubDeliveryError("create review failed with status 500");
+        },
+      },
+      runReview: async (req) => ({
+        reviewId: req.reviewId,
+        status: "completed",
+        report: { summary: NO_FINDINGS_SUMMARY, findings: [] },
+      }),
+      buildReviewDeps: async () => fakeDeps,
+      maxConcurrent: 1,
+      retryMax: 0,
+    });
+    const reviewId = randomUUID().replace(/-/g, "");
+    await worker.enqueue({
+      prUrl,
+      idempotencyKey: "gh-fail-no-teams",
+      teamsConversationRef,
+      reviewId,
+    });
+    await worker.drain();
+    expect(messenger.sent).toHaveLength(0);
+    const row = await getReviewByIdempotencyKey(pool, "gh-fail-no-teams");
+    expect(row?.status).toBe("failed");
+    expect(row?.error_code).toBe("github_delivery_failed");
+  });
+
+  it("logs review failure with error code", async () => {
+    const logger = {
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+    const reviewId = randomUUID().replace(/-/g, "");
+    const worker = createReviewWorker({
+      pool,
+      config: { ...baseConfig(), reviewRetryMax: 0 },
+      messenger: createFakeTeamsMessenger(),
+      logger,
+      runReview: async (req) => ({
+        reviewId: req.reviewId,
+        status: "failed",
+        error: { code: "review_id_in_use", message: "dir exists" },
+      }),
+      buildReviewDeps: async () => fakeDeps,
+      maxConcurrent: 1,
+      retryMax: 0,
+    });
+    await worker.enqueue({
+      prUrl,
+      idempotencyKey: "log-fail",
+      teamsConversationRef,
+      reviewId,
+    });
+    await worker.drain();
+    expect(logger.info).toHaveBeenCalledWith(
+      "review started",
+      expect.objectContaining({ reviewId }),
+    );
+    expect(logger.error).toHaveBeenCalledWith(
+      "review finished",
+      expect.objectContaining({
+        reviewId,
+        status: "failed",
+        errorCode: "review_id_in_use",
+      }),
+    );
   });
 });
 

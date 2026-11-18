@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { mkdir } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,10 +9,13 @@ import { createPool, migrate } from "@review/db";
 import { loadConfig } from "@review/shared";
 import {
   createHttpTeamsMessenger,
+  createPowerAutomateTeamsMessenger,
   createTeamsWebhookServer,
+  type TeamsMessenger,
 } from "@review/teams";
 import { createLogger } from "./log.js";
 import { resolvePrBranchesViaGithub } from "./github-pr.js";
+import { createGithubReviewPoster } from "./github-review.js";
 import type { ReviewDeps } from "./review.js";
 import { runReview } from "./review.js";
 import { createReviewWorker } from "./worker.js";
@@ -43,14 +47,20 @@ export async function startTeamsWebhookCli(
   env: NodeJS.ProcessEnv,
 ): Promise<{ server: Server; shutdown: () => Promise<void> }> {
   const config = loadConfig({ ...env, REQUIRE_TEAMS: "true" });
+  await mkdir(config.worktreeRoot, { recursive: true });
   const pool = createPool(config.databaseUrl);
   await migrate(pool);
 
   const logger = createLogger({ component: "teams-webhook" });
-  const messenger = createHttpTeamsMessenger({
-    appId: config.teams.botAppId,
-    password: config.teams.botPassword,
-  });
+  logger.info("worktree root ready", { worktreeRoot: config.worktreeRoot });
+  const messenger: TeamsMessenger = config.teams.replyFlowUrl
+    ? createPowerAutomateTeamsMessenger({
+        flowUrl: config.teams.replyFlowUrl,
+      })
+    : createHttpTeamsMessenger({
+        appId: config.teams.botAppId,
+        password: config.teams.botPassword,
+      });
 
   const { command: mcpServerCommand, args: mcpServerArgs } = resolveMcpLaunch();
 
@@ -61,6 +71,7 @@ export async function startTeamsWebhookCli(
       claudeCliPath: config.claudeCliPath,
       mcpServerCommand,
       mcpServerArgs,
+      logger,
       getPrBranches: async (url) => {
         if (!config.githubToken) {
           throw new Error(
@@ -81,12 +92,18 @@ export async function startTeamsWebhookCli(
     };
   };
 
+  const githubReviewPoster =
+    config.githubReviewDelivery && config.githubToken
+      ? createGithubReviewPoster({ token: config.githubToken })
+      : null;
+
   const worker = createReviewWorker({
     pool,
     config,
     messenger,
     runReview,
     buildReviewDeps,
+    githubReviewPoster,
     logger,
   });
 
