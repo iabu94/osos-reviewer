@@ -11,9 +11,11 @@ import type { RawBodyRequest } from "@nestjs/common";
 import type { Request, Response } from "express";
 import {
   handleTeamsHttpRequest,
+  type TeamsWebhookLogger,
   type TeamsWebhookWorker,
 } from "@review/teams";
 import {
+  TEAMS_WEBHOOK_LOGGER,
   TEAMS_WEBHOOK_SECRET,
   TEAMS_WEBHOOK_WORKER,
 } from "./review-tokens.js";
@@ -24,6 +26,8 @@ export class TeamsController {
     @Inject(TEAMS_WEBHOOK_SECRET) private readonly secret: string,
     @Inject(TEAMS_WEBHOOK_WORKER)
     private readonly worker: TeamsWebhookWorker,
+    @Inject(TEAMS_WEBHOOK_LOGGER)
+    private readonly logger: TeamsWebhookLogger,
   ) {}
 
   @Get("healthz")
@@ -37,7 +41,7 @@ export class TeamsController {
         headers: {},
         rawBody: Buffer.alloc(0),
       },
-      { secret: this.secret, worker: this.worker },
+      { secret: this.secret, worker: this.worker, logger: this.logger },
     );
     res.status(result.status).json(result.body);
   }
@@ -59,7 +63,7 @@ export class TeamsController {
         },
         rawBody,
       },
-      { secret: this.secret, worker: this.worker },
+      { secret: this.secret, worker: this.worker, logger: this.logger },
     );
     res.status(result.status).json(result.body);
   }

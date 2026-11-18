@@ -8,9 +8,16 @@ import type { INestApplication } from "@nestjs/common";
 import type { TeamsWebhookWorker } from "@review/teams";
 import { TeamsController } from "../src/teams.controller.js";
 import {
+  TEAMS_WEBHOOK_LOGGER,
   TEAMS_WEBHOOK_SECRET,
   TEAMS_WEBHOOK_WORKER,
 } from "../src/review-tokens.js";
+
+const noopLogger = {
+  info() {},
+  warn() {},
+  error() {},
+};
 
 const fixturesDir = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -45,6 +52,7 @@ describe("Teams webhook Nest e2e", () => {
       providers: [
         { provide: TEAMS_WEBHOOK_SECRET, useValue: "sec" },
         { provide: TEAMS_WEBHOOK_WORKER, useValue: worker },
+        { provide: TEAMS_WEBHOOK_LOGGER, useValue: noopLogger },
       ],
     }).compile();
 
@@ -82,6 +90,7 @@ describe("Teams webhook Nest e2e", () => {
       providers: [
         { provide: TEAMS_WEBHOOK_SECRET, useValue: TEAMS_TOKEN },
         { provide: TEAMS_WEBHOOK_WORKER, useValue: worker },
+        { provide: TEAMS_WEBHOOK_LOGGER, useValue: noopLogger },
       ],
     }).compile();
 
