@@ -86,12 +86,18 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
   const teamsWebhookSecret = requireTeams
     ? requireTeamsEnv(env, "TEAMS_WEBHOOK_SECRET", "TEAMS_WEBHOOK_SECRET")
     : (env.TEAMS_WEBHOOK_SECRET ?? "");
-  const teamsBotAppId = requireTeams
-    ? requireTeamsEnv(env, "TEAMS_BOT_APP_ID", "TEAMS_BOT_APP_ID")
-    : (env.TEAMS_BOT_APP_ID ?? "");
-  const teamsBotPassword = requireTeams
-    ? requireTeamsEnv(env, "TEAMS_BOT_PASSWORD", "TEAMS_BOT_PASSWORD")
-    : (env.TEAMS_BOT_PASSWORD ?? "");
+  const teamsReplyFlowUrl = env.TEAMS_REPLY_FLOW_URL ?? "";
+  const teamsBotAppId = env.TEAMS_BOT_APP_ID ?? "";
+  const teamsBotPassword = env.TEAMS_BOT_PASSWORD ?? "";
+  if (requireTeams) {
+    const hasFlow = teamsReplyFlowUrl.length > 0;
+    const hasBot = teamsBotAppId.length > 0 && teamsBotPassword.length > 0;
+    if (!hasFlow && !hasBot) {
+      throw new ConfigError(
+        "When REQUIRE_TEAMS is true, set TEAMS_REPLY_FLOW_URL or both TEAMS_BOT_APP_ID and TEAMS_BOT_PASSWORD",
+      );
+    }
+  }
 
   const teamsPort = env.TEAMS_WEBHOOK_PORT
     ? Number(env.TEAMS_WEBHOOK_PORT)
@@ -125,11 +131,14 @@ export function loadConfig(env: NodeJS.ProcessEnv): AppConfig {
       : DEFAULT_TIMEOUT_MS,
     teams: {
       webhookSecret: teamsWebhookSecret,
+      replyFlowUrl: teamsReplyFlowUrl,
       botAppId: teamsBotAppId,
       botPassword: teamsBotPassword,
       port: teamsPort,
     },
     githubToken: env.GITHUB_TOKEN || undefined,
+    githubReviewDelivery:
+      Boolean(env.GITHUB_TOKEN) && env.GITHUB_REVIEW_DELIVERY !== "false",
     maxConcurrentReviews,
     reviewRetryMax,
   };

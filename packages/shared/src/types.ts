@@ -63,11 +63,15 @@ export interface AppConfig {
   reviewTimeoutMs: number;
   teams: {
     webhookSecret: string;
+    /** Power Automate HTTP trigger URL for replies (Teams App path). */
+    replyFlowUrl: string;
     botAppId: string;
     botPassword: string;
     port: number;
   };
   githubToken?: string;
+  /** When true, Teams worker posts a COMMENT review to the trigger GitHub PR. */
+  githubReviewDelivery: boolean;
   maxConcurrentReviews: number;
   reviewRetryMax: number;
 }

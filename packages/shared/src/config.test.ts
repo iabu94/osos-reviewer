@@ -126,9 +126,22 @@ describe("loadConfig", () => {
     });
     expect(cfg.teams.port).toBe(3099);
     expect(cfg.teams.webhookSecret).toBe("sec");
+    expect(cfg.teams.replyFlowUrl).toBe("");
     expect(cfg.maxConcurrentReviews).toBe(1);
     expect(cfg.reviewRetryMax).toBe(3);
     expect(cfg.githubToken).toBe("gh");
+  });
+
+  it("loads Power Automate reply flow when REQUIRE_TEAMS=true", () => {
+    const cfg = loadConfig({
+      ...baseEnv,
+      REQUIRE_TEAMS: "true",
+      TEAMS_WEBHOOK_SECRET: "sec",
+      TEAMS_REPLY_FLOW_URL: "https://prod-00.logic.azure.com/workflows/abc",
+    });
+    expect(cfg.teams.replyFlowUrl).toContain("logic.azure.com");
+    expect(cfg.teams.botAppId).toBe("");
+    expect(cfg.teams.botPassword).toBe("");
   });
 
   it("throws ConfigError when REQUIRE_TEAMS=true and secret missing", () => {
@@ -142,12 +155,42 @@ describe("loadConfig", () => {
     ).toThrow(/TEAMS_WEBHOOK_SECRET/);
   });
 
+  it("throws ConfigError when REQUIRE_TEAMS=true and neither flow nor bot set", () => {
+    expect(() =>
+      loadConfig({
+        ...baseEnv,
+        REQUIRE_TEAMS: "true",
+        TEAMS_WEBHOOK_SECRET: "sec",
+      }),
+    ).toThrow(/TEAMS_REPLY_FLOW_URL|TEAMS_BOT_APP_ID/);
+  });
+
   it("allows empty Teams settings when REQUIRE_TEAMS is unset", () => {
     const cfg = loadConfig({ ...baseEnv });
     expect(cfg.teams.port).toBe(3080);
     expect(cfg.teams.webhookSecret).toBe("");
+    expect(cfg.teams.replyFlowUrl).toBe("");
     expect(cfg.maxConcurrentReviews).toBe(2);
     expect(cfg.reviewRetryMax).toBe(2);
     expect(cfg.githubToken).toBeUndefined();
+  });
+
+  it("githubReviewDelivery defaults from GITHUB_TOKEN and GITHUB_REVIEW_DELIVERY", () => {
+    expect(loadConfig({ ...baseEnv, GITHUB_TOKEN: "gh" }).githubReviewDelivery).toBe(
+      true,
+    );
+    expect(
+      loadConfig({
+        ...baseEnv,
+        GITHUB_TOKEN: "gh",
+        GITHUB_REVIEW_DELIVERY: "false",
+      }).githubReviewDelivery,
+    ).toBe(false);
+    expect(
+      loadConfig({
+        ...baseEnv,
+        GITHUB_REVIEW_DELIVERY: "true",
+      }).githubReviewDelivery,
+    ).toBe(false);
   });
 });
