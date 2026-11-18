@@ -30,15 +30,17 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 
-echo "==> Package tests (@review/teams, orchestrator, db, shared)"
+echo "==> Package tests (@review/api, teams, orchestrator, db, shared)"
+npm run test -w @review/api
 npm run test -w @review/teams
 npm run test -w @review/orchestrator
 npm run test -w @review/db
 npm run test -w @review/shared
 
 echo "==> Ephemeral signed webhook POST"
-TSX="$ROOT/packages/orchestrator/node_modules/.bin/tsx"
-[ -x "$TSX" ] || TSX="$ROOT/packages/teams/node_modules/.bin/tsx"
+TSX="$ROOT/node_modules/.bin/tsx"
+[ -x "$TSX" ] || TSX="$ROOT/packages/orchestrator/node_modules/.bin/tsx"
+[ -x "$TSX" ] || TSX="$ROOT/apps/api/node_modules/.bin/tsx"
 "$TSX" "$ROOT/scripts/smoke-phase6-webhook.ts"
 
 echo "Phase 6 smoke OK"

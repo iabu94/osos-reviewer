@@ -10,8 +10,8 @@ Phases 1–6 are implemented: foundation, document RAG, code intelligence, MCP r
 Microsoft Teams (ReviewBot mention + PR URL)
       |
       v
-Teams webhook (@review/teams)  --HMAC-->  202 accepted
-      |
+Nest HTTP host (@review/api)  --HMAC-->  202 accepted
+      |  (handlers from @review/teams)
       v
 Review worker (@review/orchestrator)
       |
@@ -31,7 +31,7 @@ Review worker (@review/orchestrator)
       +-- PostgreSQL + pgvector (@review/db)
 ```
 
-Local CLI reviews skip Teams and call the same `runReview` path directly.
+Local CLI reviews skip Teams and call the same `runReview` path directly. `npm start` boots the Nest Teams app (`@review/api`).
 
 ## Prerequisites
 
@@ -49,7 +49,7 @@ cp .env.example .env   # edit REPOS_JSON / paths; REPOS_JSON is single-quoted JS
 docker compose up -d
 ```
 
-The orchestrator CLI loads `.env` via `tsx --env-file=../../.env`. Postgres is published on **host port 5433** (avoids clashing with a local Postgres on 5432).
+The Nest Teams app and orchestrator CLI load `.env` via `tsx --env-file=../../.env`. Postgres is published on **host port 5433** (avoids clashing with a local Postgres on 5432).
 
 Create the test database when running DB-backed suites:
 
@@ -189,7 +189,8 @@ Allowed tools include read-only `Read` plus the four `mcp__review__*` MCP tools;
 Teams messages that mention **ReviewBot** and include a GitHub pull request URL trigger an asynchronous review.
 
 ```bash
-npm run start:teams -w @review/orchestrator
+npm start
+# or: npm run start:teams -w @review/api
 ```
 
 | Route | Response |
@@ -220,8 +221,9 @@ When `GITHUB_TOKEN` is set and `GITHUB_REVIEW_DELIVERY` is not `false`, the Team
 | `@review/code-intel` | Symbol parsing, baseline + PR delta indexing, retrieval |
 | `@review/knowledge` | Knowledge-base discovery, chunking, embeddings, ingest, retrieval |
 | `@review/mcp-server` | MCP tools over stdio |
-| `@review/orchestrator` | Review lifecycle, CLI, Teams worker + `start:teams` |
-| `@review/teams` | Webhook server, Adaptive Cards, Bot Connector client |
+| `@review/orchestrator` | Review lifecycle, CLI review, Teams runtime/worker |
+| `@review/teams` | Webhook handler, Adaptive Cards, Bot Connector client |
+| `@review/api` | NestJS HTTP host for Teams webhook (`npm start`) |
 
 ## Spec & plans
 
