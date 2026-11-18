@@ -503,6 +503,50 @@ describeDb("createReviewWorker", () => {
     expect(messenger.sent).toHaveLength(1);
   });
 
+  it("does not post GitHub on retryable runReview failure until terminal", async () => {
+    let githubCalls = 0;
+    let reviewAttempts = 0;
+    const worker = createReviewWorker({
+      pool,
+      config: { ...baseConfig(), githubReviewDelivery: true, reviewRetryMax: 1 },
+      messenger: createFakeTeamsMessenger(),
+      githubReviewPoster: {
+        async postReview(input) {
+          githubCalls++;
+          expect(input.result.status).toBe("completed");
+          return { status: "created" };
+        },
+      },
+      runReview: async (req) => {
+        reviewAttempts++;
+        if (reviewAttempts === 1) {
+          return {
+            reviewId: req.reviewId,
+            status: "failed",
+            error: { code: "claude_timeout", message: "timeout" },
+          };
+        }
+        return {
+          reviewId: req.reviewId,
+          status: "completed",
+          report: { summary: NO_FINDINGS_SUMMARY, findings: [] },
+        };
+      },
+      buildReviewDeps: async () => fakeDeps,
+      maxConcurrent: 1,
+      retryMax: 1,
+    });
+    await worker.enqueue({
+      prUrl,
+      idempotencyKey: "gh-after-retryable",
+      teamsConversationRef,
+      reviewId: randomUUID().replace(/-/g, ""),
+    });
+    await worker.drain();
+    expect(reviewAttempts).toBe(2);
+    expect(githubCalls).toBe(1);
+  });
+
   it("does not call Teams when GitHub fails on an attempt", async () => {
     const messenger = createFakeTeamsMessenger();
     const worker = createReviewWorker({

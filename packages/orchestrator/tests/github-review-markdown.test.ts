@@ -101,6 +101,29 @@ describe("buildGithubReviewPayload", () => {
     expect(payload.comments[1]).not.toHaveProperty("start_line");
   });
 
+  it("path not in PR files stays body-only", () => {
+    const payload = buildGithubReviewPayload(
+      {
+        reviewId: "rev4b",
+        status: "completed",
+        report: {
+          summary: "missing path",
+          findings: [
+            finding({
+              title: "unknown file",
+              repo: "acme/be",
+              filePath: "src/NotInPr.cs",
+              lineStart: 3,
+            }),
+          ],
+        },
+      },
+      pull,
+    );
+    expect(payload.comments).toEqual([]);
+    expect(payload.body).toContain("unknown file");
+  });
+
   it("cross-repo finding stays body-only", () => {
     const payload = buildGithubReviewPayload(
       {

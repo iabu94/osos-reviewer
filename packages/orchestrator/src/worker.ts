@@ -138,17 +138,25 @@ export function createReviewWorker(deps: ReviewWorkerDeps): ReviewWorker {
           await deps.buildReviewDeps(prUrl),
         );
 
-        if (
+        const reviewErrorCode = last.error?.code;
+        const retryableReviewFailure =
+          last.status === "failed" &&
+          !!reviewErrorCode &&
+          RETRYABLE_CODES.has(reviewErrorCode) &&
+          attempt < retryMax;
+        const shouldPostGithub =
           deps.config.githubReviewDelivery &&
           deps.githubReviewPoster &&
-          !githubDelivered
-        ) {
+          !githubDelivered &&
+          !retryableReviewFailure;
+
+        if (shouldPostGithub) {
           try {
             logger.info("github review sending", {
               reviewId,
               status: last.status,
             });
-            await deps.githubReviewPoster.postReview({
+            await deps.githubReviewPoster!.postReview({
               prUrl,
               result: last,
             });
