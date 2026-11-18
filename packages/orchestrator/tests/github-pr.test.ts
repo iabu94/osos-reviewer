@@ -10,6 +10,7 @@ describe("fetchGithubPullDetails", () => {
       if (String(url).endsWith("/pulls/1")) {
         return new Response(
           JSON.stringify({
+            title: "feat: demo",
             head: { ref: "feat", sha: "abc123" },
             base: { ref: "main" },
           }),
@@ -32,6 +33,7 @@ describe("fetchGithubPullDetails", () => {
       { token: "t", fetchImpl },
     );
     expect(d.headSha).toBe("abc123");
+    expect(d.title).toBe("feat: demo");
     expect(d.filePaths).toEqual(["src/A.cs", "src/B.cs"]);
   });
 });

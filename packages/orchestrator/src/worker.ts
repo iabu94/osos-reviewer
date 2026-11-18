@@ -10,7 +10,11 @@ type ReviewDbPool = ReturnType<typeof createPool>;
 import { buildReviewAdaptiveCard } from "@review/teams";
 import type { AppConfig, ReviewResult, TeamsConversationRef } from "@review/shared";
 import type { TeamsMessenger } from "@review/teams";
-import type { GithubReviewPoster } from "./github-review.js";
+import { fetchGithubPullDetails } from "./github-pr.js";
+import type {
+  GithubReviewPoster,
+  GithubReviewPostResult,
+} from "./github-review.js";
 import type { ReviewLogger } from "./log.js";
 import { createLogger } from "./log.js";
 import type { ReviewDeps } from "./review.js";
@@ -131,6 +135,7 @@ export function createReviewWorker(deps: ReviewWorkerDeps): ReviewWorker {
     try {
       let last: ReviewResult | undefined;
       let githubDelivered = false;
+      let githubPost: GithubReviewPostResult | undefined;
       for (let attempt = 0; attempt <= retryMax; attempt++) {
         await markReviewRunning(deps.pool, reviewId);
         last = await deps.runReview(
@@ -156,7 +161,7 @@ export function createReviewWorker(deps: ReviewWorkerDeps): ReviewWorker {
               reviewId,
               status: last.status,
             });
-            await deps.githubReviewPoster!.postReview({
+            githubPost = await deps.githubReviewPoster!.postReview({
               prUrl,
               result: last,
             });
@@ -175,13 +180,38 @@ export function createReviewWorker(deps: ReviewWorkerDeps): ReviewWorker {
 
         if (last.status !== "failed" || last.error?.code !== "github_delivery_failed") {
           try {
+            if (!githubPost && deps.config.githubToken) {
+              try {
+                const details = await fetchGithubPullDetails(prUrl, {
+                  token: deps.config.githubToken,
+                });
+                githubPost = {
+                  status: "skipped",
+                  title: details.title,
+                  headSha: details.headSha,
+                };
+              } catch (err) {
+                const message =
+                  err instanceof Error ? err.message : String(err);
+                logger.warn("teams card metadata fetch failed", {
+                  reviewId,
+                  err: message,
+                });
+              }
+            }
             logger.info("teams reply sending", {
               reviewId,
               status: last.status,
             });
             await deps.messenger.reply(
               teamsConversationRef,
-              buildReviewAdaptiveCard(last),
+              buildReviewAdaptiveCard(last, {
+                prUrl,
+                prTitle: githubPost?.title || undefined,
+                headSha:
+                  githubPost?.headSha ?? last.metadata?.primaryHeadSha,
+                openUrl: githubPost?.htmlUrl ?? prUrl,
+              }),
             );
             logger.info("teams reply sent", { reviewId });
           } catch (err) {

@@ -5,6 +5,7 @@ export type GithubPullDetails = {
   owner: string;
   repo: string;
   number: number;
+  title: string;
   headSha: string;
   headRef: string;
   baseRef: string;
@@ -34,6 +35,7 @@ export async function fetchGithubPullDetails(
     );
   }
   const pullJson = (await pullRes.json()) as {
+    title?: string;
     head: { ref: string; sha: string };
     base: { ref: string };
   };
@@ -72,6 +74,7 @@ export async function fetchGithubPullDetails(
     owner,
     repo,
     number,
+    title: typeof pullJson.title === "string" ? pullJson.title : "",
     headSha: pullJson.head.sha,
     headRef: pullJson.head.ref,
     baseRef: pullJson.base.ref,

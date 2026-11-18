@@ -16,7 +16,10 @@ export {
   createGithubReviewPoster,
   GithubDeliveryError,
 } from "./github-review.js";
-export type { GithubReviewPoster } from "./github-review.js";
+export type {
+  GithubReviewPoster,
+  GithubReviewPostResult,
+} from "./github-review.js";
 export {
   buildGithubReviewPayload,
   reviewIdMarker,

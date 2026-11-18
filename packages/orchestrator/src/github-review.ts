@@ -14,11 +14,18 @@ export class GithubDeliveryError extends Error {
   }
 }
 
+export type GithubReviewPostResult = {
+  status: "created" | "skipped";
+  title: string;
+  headSha: string;
+  htmlUrl?: string;
+};
+
 export type GithubReviewPoster = {
   postReview(input: {
     prUrl: string;
     result: ReviewResult;
-  }): Promise<{ status: "created" | "skipped" }>;
+  }): Promise<GithubReviewPostResult>;
 };
 
 function githubHeaders(token: string): HeadersInit {
@@ -53,7 +60,11 @@ export function createGithubReviewPoster(opts: {
       const existing = (await listRes.json()) as Array<{ body?: string | null }>;
       const marker = reviewIdMarker(result.reviewId);
       if (existing.some((r) => (r.body ?? "").includes(marker))) {
-        return { status: "skipped" };
+        return {
+          status: "skipped",
+          title: details.title,
+          headSha: details.headSha,
+        };
       }
 
       const payload = buildGithubReviewPayload(result, details);
@@ -70,7 +81,15 @@ export function createGithubReviewPoster(opts: {
           `create review failed with status ${postRes.status}`,
         );
       }
-      return { status: "created" };
+      const created = (await postRes.json()) as { html_url?: string };
+      return {
+        status: "created",
+        title: details.title,
+        headSha: details.headSha,
+        ...(typeof created.html_url === "string"
+          ? { htmlUrl: created.html_url }
+          : {}),
+      };
     },
   };
 }

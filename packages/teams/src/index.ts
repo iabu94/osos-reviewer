@@ -1,5 +1,6 @@
 export {
   buildReviewAdaptiveCard,
+  formatReviewCardTitle,
   CARD_SCHEMA,
   CARD_TYPE,
   CARD_VERSION,
@@ -7,7 +8,9 @@ export {
   FAILED_REVIEW_TITLE,
   COMPLETED_REVIEW_TITLE,
   MAX_FINDINGS_IN_CARD,
+  OPEN_PR_ACTION_TITLE,
   type AdaptiveCard,
+  type BuildReviewAdaptiveCardOpts,
 } from "./adaptive-card.js";
 
 export {

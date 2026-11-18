@@ -16,6 +16,7 @@ describe("createGithubReviewPoster", () => {
       const url = String(input);
       if (url.endsWith("/pulls/1") && !url.includes("/reviews") && !url.includes("/files")) {
         return jsonResponse({
+          title: "feat: demo",
           head: { ref: "feat", sha: "abc123" },
           base: { ref: "main" },
         });
@@ -29,7 +30,14 @@ describe("createGithubReviewPoster", () => {
       if (url.includes("/pulls/1/reviews") && init?.method === "POST") {
         const body = JSON.parse(String(init.body));
         posts.push({ url, body });
-        return jsonResponse({ id: 99 }, 201);
+        return jsonResponse(
+          {
+            id: 99,
+            html_url:
+              "https://github.com/acme/be/pull/1#pullrequestreview-99",
+          },
+          201,
+        );
       }
       throw new Error(`unexpected ${url} ${init?.method}`);
     };
@@ -44,7 +52,12 @@ describe("createGithubReviewPoster", () => {
       },
     });
 
-    expect(out).toEqual({ status: "created" });
+    expect(out).toEqual({
+      status: "created",
+      title: "feat: demo",
+      headSha: "abc123",
+      htmlUrl: "https://github.com/acme/be/pull/1#pullrequestreview-99",
+    });
     expect(posts).toHaveLength(1);
     expect(posts[0]!.body).toMatchObject({
       event: "COMMENT",
@@ -61,6 +74,7 @@ describe("createGithubReviewPoster", () => {
       const url = String(input);
       if (url.endsWith("/pulls/1") && !url.includes("/reviews") && !url.includes("/files")) {
         return jsonResponse({
+          title: "feat: demo",
           head: { ref: "feat", sha: "abc123" },
           base: { ref: "main" },
         });
@@ -90,7 +104,11 @@ describe("createGithubReviewPoster", () => {
       },
     });
 
-    expect(out).toEqual({ status: "skipped" });
+    expect(out).toEqual({
+      status: "skipped",
+      title: "feat: demo",
+      headSha: "abc123",
+    });
     expect(postCount).toBe(0);
   });
 
