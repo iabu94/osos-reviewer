@@ -115,3 +115,45 @@ export function createHttpTeamsMessenger(opts: {
     },
   };
 }
+
+/**
+ * Posts Adaptive Card replies to a Power Automate HTTP trigger.
+ * Expected flow body shape (map these in the PA schema):
+ *   serviceUrl, conversationId, activityId?, replyToId?,
+ *   contentType, card
+ */
+export function createPowerAutomateTeamsMessenger(opts: {
+  flowUrl: string;
+  fetchImpl?: typeof fetch;
+}): TeamsMessenger {
+  const fetchImpl = opts.fetchImpl ?? fetch;
+  const flowUrl = opts.flowUrl;
+
+  return {
+    async reply(
+      ref: TeamsConversationRef,
+      card: { contentType: string; content: unknown },
+    ): Promise<void> {
+      const body = {
+        serviceUrl: ref.serviceUrl,
+        conversationId: ref.conversationId,
+        activityId: ref.activityId,
+        replyToId: ref.replyToId,
+        contentType: card.contentType,
+        card: card.content,
+      };
+
+      const res = await fetchImpl(flowUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        throw new Error(
+          `teams_delivery_failed: Power Automate reply failed with status ${res.status} ${res.statusText}`,
+        );
+      }
+    },
+  };
+}

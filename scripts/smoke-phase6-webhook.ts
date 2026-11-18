@@ -40,7 +40,7 @@ async function main(): Promise<void> {
   const url = `http://127.0.0.1:${addr.port}`;
   const body = await readFile(fixture);
 
-  const res = await fetch(`${url}/hooks/teams`, {
+  const res = await fetch(`${url}/teams-hook`, {
     method: "POST",
     headers: {
       "content-type": "application/json",

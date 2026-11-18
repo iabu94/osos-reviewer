@@ -3,6 +3,7 @@ import { CARD_CONTENT_TYPE } from "../src/adaptive-card.js";
 import {
   createFakeTeamsMessenger,
   createHttpTeamsMessenger,
+  createPowerAutomateTeamsMessenger,
 } from "../src/messenger.js";
 
 describe("Teams messenger", () => {
@@ -77,6 +78,64 @@ describe("Teams messenger", () => {
       password: "pwd",
       fetchImpl: fetchImpl as typeof fetch,
       getToken: async () => "token",
+    });
+
+    await expect(
+      messenger.reply(
+        { serviceUrl: "https://sm.test", conversationId: "c1" },
+        { contentType: CARD_CONTENT_TYPE, content: {} },
+      ),
+    ).rejects.toThrow(/teams_delivery_failed/);
+  });
+
+  it("Power Automate messenger posts card + conversation ref to flow URL", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 202,
+      statusText: "Accepted",
+    });
+    const flowUrl = "https://prod-00.logic.azure.com/workflows/abc/triggers/manual/paths/invoke";
+    const messenger = createPowerAutomateTeamsMessenger({
+      flowUrl,
+      fetchImpl: fetchImpl as typeof fetch,
+    });
+
+    await messenger.reply(
+      {
+        serviceUrl: "https://sm.test",
+        conversationId: "conv-1",
+        activityId: "act-1",
+        replyToId: "parent-1",
+      },
+      { contentType: CARD_CONTENT_TYPE, content: { type: "AdaptiveCard" } },
+    );
+
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    expect(url).toBe(flowUrl);
+    expect(init?.method).toBe("POST");
+    expect(init?.headers).toMatchObject({
+      "Content-Type": "application/json",
+    });
+    expect(JSON.parse(init?.body as string)).toEqual({
+      serviceUrl: "https://sm.test",
+      conversationId: "conv-1",
+      activityId: "act-1",
+      replyToId: "parent-1",
+      contentType: CARD_CONTENT_TYPE,
+      card: { type: "AdaptiveCard" },
+    });
+  });
+
+  it("Power Automate messenger throws teams_delivery_failed on non-2xx", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: "Internal Server Error",
+    });
+    const messenger = createPowerAutomateTeamsMessenger({
+      flowUrl: "https://example.com/flow",
+      fetchImpl: fetchImpl as typeof fetch,
     });
 
     await expect(

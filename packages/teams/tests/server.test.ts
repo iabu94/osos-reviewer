@@ -12,6 +12,14 @@ function hmacSha256Hex(body: Buffer | string, secret: string): string {
   return createHmac("sha256", secret).update(body).digest("hex");
 }
 
+const TEAMS_TOKEN = "vqF0En+Z0ucuRTM/01o2GuhMH3hKKk/N2bOmlM31zaA=";
+
+function teamsAuthHeader(body: Buffer | string, tokenBase64: string): string {
+  const key = Buffer.from(tokenBase64, "base64");
+  const digest = createHmac("sha256", key).update(body).digest("base64");
+  return `HMAC ${digest}`;
+}
+
 function listen(server: Server): Promise<{
   url: string;
   close: () => Promise<void>;
@@ -49,7 +57,7 @@ describe("createTeamsWebhookServer", () => {
     servers.length = 0;
   });
 
-  it("POST /hooks/teams returns 202 and enqueues", async () => {
+  it("POST /teams-hook returns 202 and enqueues with review signature", async () => {
     const enqueues: unknown[] = [];
     const server = createTeamsWebhookServer({
       secret: "sec",
@@ -63,7 +71,7 @@ describe("createTeamsWebhookServer", () => {
     servers.push(server);
     const { url, close } = await listen(server);
     const body = await readFile(join(fixturesDir, "activity-valid.json"));
-    const res = await fetch(`${url}/hooks/teams`, {
+    const res = await fetch(`${url}/teams-hook`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -86,6 +94,32 @@ describe("createTeamsWebhookServer", () => {
     await close();
   });
 
+  it("POST /teams-hook accepts Teams Authorization HMAC and returns message", async () => {
+    const server = createTeamsWebhookServer({
+      secret: TEAMS_TOKEN,
+      worker: {
+        enqueue: async () => ({ reviewId: "rid-teams", duplicated: false }),
+      },
+    });
+    servers.push(server);
+    const { url, close } = await listen(server);
+    const body = await readFile(join(fixturesDir, "activity-valid.json"));
+    const res = await fetch(`${url}/teams-hook`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: teamsAuthHeader(body, TEAMS_TOKEN),
+      },
+      body,
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      type: "message",
+      text: "Review accepted (rid-teams). I'll post findings in this thread.",
+    });
+    await close();
+  });
+
   it("rejects bad signature with 401", async () => {
     const server = createTeamsWebhookServer({
       secret: "sec",
@@ -96,7 +130,7 @@ describe("createTeamsWebhookServer", () => {
     servers.push(server);
     const { url, close } = await listen(server);
     const body = await readFile(join(fixturesDir, "activity-valid.json"));
-    const res = await fetch(`${url}/hooks/teams`, {
+    const res = await fetch(`${url}/teams-hook`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -119,7 +153,7 @@ describe("createTeamsWebhookServer", () => {
     servers.push(server);
     const { url, close } = await listen(server);
     const body = await readFile(join(fixturesDir, "activity-no-pr.json"));
-    const res = await fetch(`${url}/hooks/teams`, {
+    const res = await fetch(`${url}/teams-hook`, {
       method: "POST",
       headers: {
         "content-type": "application/json",

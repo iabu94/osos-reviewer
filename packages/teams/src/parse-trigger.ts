@@ -1,8 +1,14 @@
 import { createHash } from "node:crypto";
 import type { TeamsConversationRef } from "@review/shared";
 
-const MENTION_RE = /(^|\s)@?ReviewBot\b/i;
-const PR_URL_RE = /https?:\/\/[^\s]+\/pull\/\d+/;
+/**
+ * Matches `@ReviewBot`, Teams `<at>ReviewBot</at>`, or any `<at>…</at>`.
+ * Outgoing Webhooks only fire when their configured name is @mentioned, so any
+ * `<at>` tag is a sufficient mention signal.
+ */
+const MENTION_RE =
+  /(?:^|[\s>])@?ReviewBot\b|<at[^>]*>\s*[^<]+?\s*<\/at>/i;
+const PR_URL_RE = /https?:\/\/[^\s"'<>]+\/pull\/\d+/;
 
 export type ParseTeamsTriggerResult =
   | {

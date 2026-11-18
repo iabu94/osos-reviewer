@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { access, chmod, mkdtemp, writeFile, rm } from "node:fs/promises";
+import { access, chmod, mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -142,6 +142,38 @@ describe("runReview", () => {
     ).rejects.toThrow();
   });
 
+  it("emits progress logs for each review stage", async () => {
+    const { config } = await setupPair();
+    const claude = await makeFakeClaudeFixture("success-no-findings.json");
+    const logger = {
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+    const result = await runReview(
+      {
+        prUrl: "https://github.com/acme/backend/pull/1",
+        reviewId: "rev-progress-logs",
+      },
+      { ...baseDeps(config, claude, "feature/ABC-123"), logger },
+    );
+    expect(result.status).toBe("completed");
+    const infos = logger.info.mock.calls.map((c) => c[0] as string);
+    expect(infos).toEqual(
+      expect.arrayContaining([
+        "review stage: claim worktree",
+        "review stage: resolve PR branches",
+        "review stage: resolve companion branch",
+        "review stage: create primary worktree",
+        "review stage: create companion worktree",
+        "review stage: compute focused diff",
+        "review stage: run Claude review",
+        "review stage: parse Claude output",
+        "review stage: cleanup",
+      ]),
+    );
+  });
+
   it("fails on unresolved ticket and cleans worktrees", async () => {
     const { config, worktreeRoot } = await setupPair();
     const claude = await makeFakeClaudeFixture("success-no-findings.json");
@@ -194,6 +226,59 @@ describe("runReview", () => {
     expect(result.status).toBe("failed");
     expect(result.error?.code).toBe("invalid_review_id");
     await expect(access(join(worktreeRoot, ".."))).resolves.toBeUndefined();
+  });
+
+  it("creates missing WORKTREE_ROOT instead of reporting review_id_in_use", async () => {
+    const { be, fe } = await setupPair();
+    const missingRoot = join(tmpdir(), `orch-missing-${Date.now()}`);
+    cleanups.push(async () => rm(missingRoot, { recursive: true, force: true }));
+    const config = loadConfig({
+      DATABASE_URL: "postgres://review:review@localhost:5433/review",
+      WORKTREE_ROOT: missingRoot,
+      CLAUDE_CLI_PATH: "claude",
+      EMBEDDING_PROVIDER: "fake",
+      REPOS_JSON: JSON.stringify([
+        {
+          id: "be",
+          role: "backend",
+          localPath: be.repoPath,
+          defaultBaseBranch: "develop",
+          githubRepo: "acme/backend",
+        },
+        {
+          id: "fe",
+          role: "frontend",
+          localPath: fe.repoPath,
+          defaultBaseBranch: "develop",
+          githubRepo: "acme/frontend",
+        },
+      ]),
+    });
+    const claude = await makeFakeClaudeFixture("success-no-findings.json");
+    const result = await runReview(
+      {
+        prUrl: "https://github.com/acme/backend/pull/12",
+        reviewId: "rev-missing-root",
+      },
+      baseDeps(config, claude, "feature/ABC-123"),
+    );
+    expect(result.error?.code).not.toBe("review_id_in_use");
+    expect(result.status).toBe("completed");
+  });
+
+  it("returns review_id_in_use only when the review directory already exists", async () => {
+    const { config, worktreeRoot } = await setupPair();
+    await mkdir(join(worktreeRoot, "rev-exists"), { recursive: false });
+    const claude = await makeFakeClaudeFixture("success-no-findings.json");
+    const result = await runReview(
+      {
+        prUrl: "https://github.com/acme/backend/pull/13",
+        reviewId: "rev-exists",
+      },
+      baseDeps(config, claude, "feature/ABC-123"),
+    );
+    expect(result.status).toBe("failed");
+    expect(result.error?.code).toBe("review_id_in_use");
   });
 
   it("records companion fallback when no ticket branch exists", async () => {

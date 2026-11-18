@@ -10,7 +10,11 @@ export {
   type AdaptiveCard,
 } from "./adaptive-card.js";
 
-export { verifyTeamsSignature } from "./auth.js";
+export {
+  verifyTeamsSignature,
+  verifyTeamsOutgoingHmac,
+  verifyTeamsRequest,
+} from "./auth.js";
 export {
   parseTeamsTrigger,
   type ParseTeamsTriggerResult,
@@ -18,6 +22,7 @@ export {
 export {
   createFakeTeamsMessenger,
   createHttpTeamsMessenger,
+  createPowerAutomateTeamsMessenger,
   type TeamsMessenger,
 } from "./messenger.js";
 export {

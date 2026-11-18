@@ -19,6 +19,7 @@ import { createPool, healthCheck, migrate } from "@review/db";
 import { cleanupPrIndex, indexPrDelta } from "@review/code-intel";
 import { createEmbeddingProvider } from "@review/knowledge";
 import { runClaudeReview } from "./claude.js";
+import type { ReviewLogger } from "./log.js";
 import { parseClaudeReviewOutput } from "./parse-claude.js";
 import { buildReviewPrompt } from "./prompt.js";
 
@@ -43,6 +44,7 @@ export type ReviewDeps = {
   indexPrDelta?: typeof indexPrDelta;
   cleanupPrIndex?: typeof cleanupPrIndex;
   dbPoolFactory?: (url: string) => ReturnType<typeof createPool>;
+  logger?: ReviewLogger;
 };
 
 export function parsePrUrl(prUrl: string): {
@@ -114,8 +116,15 @@ export async function runReview(
   const created: Array<{ repoPath: string; worktreePath: string }> = [];
   let claimedReviewDir: string | null = null;
   let pool: ReturnType<typeof createPool> | null = null;
+  const log = (
+    msg: string,
+    fields?: Record<string, unknown>,
+  ): void => {
+    deps.logger?.info(msg, { reviewId: request.reviewId, ...fields });
+  };
 
   const cleanup = async () => {
+    log("review stage: cleanup");
     if (pool) {
       const usedPool = pool;
       pool = null;
@@ -161,22 +170,53 @@ export async function runReview(
       };
     }
 
-    const reviewDir = join(deps.config.worktreeRoot, request.reviewId);
+    log("review stage: claim worktree");
     try {
-      await mkdir(reviewDir, { recursive: false });
-      claimedReviewDir = reviewDir;
-    } catch {
+      await mkdir(deps.config.worktreeRoot, { recursive: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       return {
         reviewId: request.reviewId,
         status: "failed",
         error: {
-          code: "review_id_in_use",
-          message: `Review directory already exists: ${reviewDir}`,
+          code: "worktree_root_unavailable",
+          message: `Could not create WORKTREE_ROOT (${deps.config.worktreeRoot}): ${message}`,
+        },
+      };
+    }
+
+    const reviewDir = join(deps.config.worktreeRoot, request.reviewId);
+    try {
+      await mkdir(reviewDir, { recursive: false });
+      claimedReviewDir = reviewDir;
+    } catch (err) {
+      const code =
+        err && typeof err === "object" && "code" in err
+          ? String((err as { code: unknown }).code)
+          : undefined;
+      if (code === "EEXIST") {
+        return {
+          reviewId: request.reviewId,
+          status: "failed",
+          error: {
+            code: "review_id_in_use",
+            message: `Review directory already exists: ${reviewDir}`,
+          },
+        };
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        reviewId: request.reviewId,
+        status: "failed",
+        error: {
+          code: "worktree_claim_failed",
+          message: `Could not claim review directory ${reviewDir}: ${message}`,
         },
       };
     }
 
     if (deps.requireDb) {
+      log("review stage: database health check");
       const check = deps.dbHealth ?? defaultDbHealth;
       const health = await check(deps.config.databaseUrl);
       if (!health.ok || !health.vector) {
@@ -191,6 +231,7 @@ export async function runReview(
       }
     }
 
+    log("review stage: resolve PR branches", { prUrl: request.prUrl });
     const parsed = parsePrUrl(request.prUrl);
     const primary = findPrimaryRepo(deps.config, parsed.owner, parsed.repo);
     const companion = findCompanionRepo(deps.config, primary.id);
@@ -211,6 +252,10 @@ export async function runReview(
       };
     }
 
+    log("review stage: resolve companion branch", {
+      ticketId,
+      companionRepoId: companion.id,
+    });
     const companionBranches = await deps.listRemoteBranches(
       companion.localPath,
     );
@@ -236,6 +281,10 @@ export async function runReview(
       throw err;
     }
 
+    log("review stage: create primary worktree", {
+      repoId: primary.id,
+      branch: branches.primaryBranch,
+    });
     const primaryWt = await createWorktree({
       repoPath: primary.localPath,
       worktreeRoot: deps.config.worktreeRoot,
@@ -249,6 +298,11 @@ export async function runReview(
     });
     worktrees.push(primaryWt.worktreePath);
 
+    log("review stage: create companion worktree", {
+      repoId: companion.id,
+      branch: companionResolution.branch,
+      usedFallback: companionResolution.usedFallback,
+    });
     const companionWt = await createWorktree({
       repoPath: companion.localPath,
       worktreeRoot: deps.config.worktreeRoot,
@@ -262,10 +316,14 @@ export async function runReview(
     });
     worktrees.push(companionWt.worktreePath);
 
+    log("review stage: compute focused diff", {
+      targetBranch: branches.targetBranch,
+    });
     const diff = await focusedDiff({
       worktreePath: primaryWt.worktreePath,
       targetBranch: branches.targetBranch,
     });
+    log("review stage: focused diff ready", { diffChars: diff.length });
 
     if (deps.requireDb) {
       pool = (deps.dbPoolFactory ?? createPool)(deps.config.databaseUrl);
@@ -289,6 +347,7 @@ export async function runReview(
       ];
       try {
         for (const t of targets) {
+          log("review stage: index PR delta", { repoId: t.repo.id });
           await index({
             pool,
             repoId: t.repo.id,
@@ -338,6 +397,9 @@ export async function runReview(
       backendRepoIds: repoIdsByRole(deps.config, "backend"),
       frontendRepoIds: repoIdsByRole(deps.config, "frontend"),
     });
+    log("review stage: run Claude review", {
+      timeoutMs: deps.config.reviewTimeoutMs,
+    });
     const runClaude = deps.runClaude ?? runClaudeReview;
     const claude = await runClaude({
       prompt,
@@ -347,6 +409,10 @@ export async function runReview(
       timeoutMs: deps.config.reviewTimeoutMs,
       cwd: primaryWt.worktreePath,
       addDirs: [companionWt.worktreePath],
+    });
+    log("review stage: Claude review returned", {
+      exitCode: claude.exitCode,
+      timedOut: claude.timedOut,
     });
 
     if (claude.timedOut) {
@@ -377,6 +443,7 @@ export async function runReview(
       };
     }
 
+    log("review stage: parse Claude output");
     const claudeOutput = parseClaudeReviewOutput(claude.stdout);
     if (!claudeOutput.ok) {
       return {

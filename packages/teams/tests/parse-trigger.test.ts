@@ -47,6 +47,36 @@ describe("parseTeamsTrigger", () => {
     }
   });
 
+  it("accepts Teams <at>ReviewBot</at> mention markup", () => {
+    const parsed = parseTeamsTrigger({
+      type: "message",
+      text: '<at>ReviewBot</at> please review https://github.com/o/r/pull/9',
+      serviceUrl: "https://sm.test",
+      conversation: { id: "c1" },
+      id: "a1",
+    });
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) {
+      expect(parsed.prUrl).toMatch(/\/pull\/9$/);
+    }
+  });
+
+  it("accepts Outgoing Webhook <at>CustomName</at> and PR URL inside HTML href", () => {
+    const parsed = parseTeamsTrigger({
+      type: "message",
+      text: '<p><at>RanilWickremesinghe</at>&nbsp;<a href="https://github.com/pbsgears/ososerp-web/pull/6918">link</a></p>',
+      serviceUrl: "https://sm.test",
+      conversation: { id: "c1" },
+      id: "a1",
+    });
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) {
+      expect(parsed.prUrl).toBe(
+        "https://github.com/pbsgears/ososerp-web/pull/6918",
+      );
+    }
+  });
+
   it("uses sha256 conversation id and pr url when activity id is absent", () => {
     const activity = {
       type: "message",

@@ -45,6 +45,7 @@ function baseConfig(databaseUrl: string): AppConfig {
     reviewTimeoutMs: 120_000,
     teams: {
       webhookSecret: "bench",
+      replyFlowUrl: "",
       botAppId: "bench",
       botPassword: "bench",
       port: 3080,

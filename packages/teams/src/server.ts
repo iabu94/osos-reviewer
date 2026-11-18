@@ -5,7 +5,7 @@ import {
   type ServerResponse,
 } from "node:http";
 import type { TeamsConversationRef } from "@review/shared";
-import { verifyTeamsSignature } from "./auth.js";
+import { verifyTeamsRequest } from "./auth.js";
 import { parseTeamsTrigger } from "./parse-trigger.js";
 
 export type TeamsWebhookLogger = {
@@ -87,10 +87,17 @@ export function createTeamsWebhookServer(
         return;
       }
 
-      if (method === "POST" && path === "/hooks/teams") {
+      if (method === "POST" && path === "/teams-hook") {
         const rawBody = await readRawBody(req);
-        const signature = headerValue(req, "x-review-signature");
-        if (!verifyTeamsSignature(rawBody, signature, opts.secret)) {
+        const auth = verifyTeamsRequest(
+          rawBody,
+          {
+            signature: headerValue(req, "x-review-signature"),
+            authorization: headerValue(req, "authorization"),
+          },
+          opts.secret,
+        );
+        if (!auth.ok) {
           sendJson(res, 401, { error: "unauthorized" });
           return;
         }
@@ -121,7 +128,23 @@ export function createTeamsWebhookServer(
           teamsConversationRef: parsed.conversationRef,
         });
 
-        logger.info("teams webhook accepted", { reviewId, duplicated });
+        logger.info("teams webhook accepted", {
+          reviewId,
+          duplicated,
+          authMode: auth.mode,
+        });
+
+        // Outgoing Webhooks require a Bot Framework message reply in-band.
+        if (auth.mode === "teams_hmac") {
+          sendJson(res, 200, {
+            type: "message",
+            text: duplicated
+              ? `Review already in progress (${reviewId}). I'll post findings in this thread.`
+              : `Review accepted (${reviewId}). I'll post findings in this thread.`,
+          });
+          return;
+        }
+
         sendJson(res, 202, {
           reviewId,
           duplicated,
