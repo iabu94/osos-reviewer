@@ -91,4 +91,25 @@ describe("buildReviewPrompt", () => {
     expect(prompt).toContain("frontendRepoIds");
     expect(prompt).toContain('"fe"');
   });
+
+  it("requires get_coding_standards before finishing, especially for routes/endpoints", () => {
+    const prompt = buildReviewPrompt({
+      request: { prUrl: "https://github.com/acme/be/pull/1", reviewId: "rev1" },
+      metadata: minimalMetadata,
+      diff: '+MapGroup("goodsReceiptVoucherLines")\n',
+      primaryWorktree: "/tmp/p",
+      companionWorktree: "/tmp/c",
+      backendRepoIds: ["be"],
+      frontendRepoIds: ["fe"],
+    });
+
+    expect(prompt).toContain(
+      "Always call get_coding_standards before finishing the review",
+    );
+    expect(prompt).toContain("routes, endpoints, MapGroup, or API paths");
+    expect(prompt).toContain('technology: "dotnet"');
+    expect(prompt).toContain(
+      "Do not skip coding-standard checks because the rules seem familiar",
+    );
+  });
 });
