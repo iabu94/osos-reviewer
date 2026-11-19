@@ -12,3 +12,50 @@ services:
       interval: 2s
       timeout: 5s
       retries: 15
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 10s
+
+  ollama-init:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        export OLLAMA_HOST=http://ollama:11434
+        echo "Pulling embeddinggemma…"
+        ollama pull embeddinggemma
+        echo "embeddinggemma ready"
+    restart: "no"
+
+  # Opt-in: docker compose --profile tunnel up -d (requires NGROK_AUTHTOKEN)
+  ngrok:
+    image: ngrok/ngrok:latest
+    profiles: ["tunnel"]
+    environment:
+      # Required when using --profile tunnel (empty token makes ngrok exit)
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+    command:
+      - "http"
+      - "--url=${NGROK_DOMAIN:-primarily-live-stag.ngrok-free.app}"
+      - "http://host.docker.internal:3080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "4040:4040"
+
+volumes:
+  ollama_data:

@@ -37,25 +37,47 @@ Local CLI reviews skip Teams and call the same `runReview` path directly. `npm s
 
 - Node.js 22+
 - npm 10+
-- Docker (for Postgres)
-- Optional: Claude Code CLI (`claude`) for live reviews
-- Optional: OpenAI-compatible embeddings API for real RAG/code vectors (`EMBEDDING_PROVIDER=fake` for local smoke)
+- Docker (Postgres, Ollama/EmbeddingGemma; optional ngrok tunnel)
+- Claude Code CLI (`claude`) on the **host** for live reviews — use Claude Pro via `claude auth login` (do **not** set `ANTHROPIC_API_KEY`)
+- For smoke without embeddings: `EMBEDDING_PROVIDER=fake`
 
-## Setup
+## Setup (hybrid: Docker deps + local API)
+
+The Nest API, orchestrator, git worktrees, and Claude Code run on the host. Docker provides Postgres, Ollama (EmbeddingGemma), and optionally ngrok.
 
 ```bash
 npm install
 cp .env.example .env   # edit REPOS_JSON / paths; REPOS_JSON is single-quoted JSON
-docker compose up -d
+# Set NGROK_AUTHTOKEN in .env if you will use the tunnel profile
+docker compose up -d                  # db + ollama; pulls embeddinggemma via ollama-init
+docker compose --profile tunnel up -d # also starts ngrok → host :3080 (needs NGROK_AUTHTOKEN)
+claude auth login                     # once, Claude Pro on this machine
+npm start                             # Nest Teams app on :3080
 ```
 
-The Nest Teams app and orchestrator CLI load `.env` via `tsx --env-file=../../.env`. Postgres is published on **host port 5433** (avoids clashing with a local Postgres on 5432).
+The Nest Teams app and orchestrator CLI load `.env` via `tsx --env-file=../../.env`.
+
+| Service | Host port | Notes |
+|---------|-----------|--------|
+| Postgres (`db`) | **5433** | Avoids clashing with a local Postgres on 5432 |
+| Ollama | **11434** | OpenAI-compatible base `http://localhost:11434/v1`, model `embeddinggemma` (768-d) |
+| ngrok | **4040** (inspector) | Fixed HTTPS: `https://primarily-live-stag.ngrok-free.app` → host `:3080`. Point Teams at `…/teams-hook` |
+| Nest API | **3080** | Local only; ngrok uses `host.docker.internal:3080` (Docker Desktop / `host-gateway`) |
 
 Create the test database when running DB-backed suites:
 
 ```bash
 docker compose exec db psql -U review -c 'CREATE DATABASE review_test;'
 export TEST_DATABASE_URL=postgres://review:review@localhost:5433/review_test
+```
+
+Smoke embeddings against Ollama:
+
+```bash
+curl -s http://localhost:11434/v1/embeddings \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer ollama' \
+  -d '{"model":"embeddinggemma","input":"hello","dimensions":768}'
 ```
 
 ## Environment
@@ -66,15 +88,15 @@ export TEST_DATABASE_URL=postgres://review:review@localhost:5433/review_test
 | `TEST_DATABASE_URL` | tests only; must differ from `DATABASE_URL` (suites truncate tables) |
 | `WORKTREE_ROOT` | required — worktree parent directory |
 | `REPOS_JSON` | required — single-quoted JSON array of repo configs (`id`, `role`, `localPath`, `defaultBaseBranch`, optional `githubRepo`) |
-| `CLAUDE_CLI_PATH` | `claude` |
+| `CLAUDE_CLI_PATH` | `claude` — host binary; authenticate with Pro (`claude auth login`), leave `ANTHROPIC_API_KEY` unset |
 | `COMPANION_FALLBACK_BRANCH` | `origin/develop` |
 | `REVIEW_TIMEOUT_MS` | `120000` |
 | `REQUIRE_DB` | `false` — set `true` for PR delta indexing during reviews |
 | `KNOWLEDGE_BASE_PATH` | `knowledge-base` (relative to repo root) |
 | `EMBEDDING_PROVIDER` | `openai_compatible` or `fake` |
-| `EMBEDDING_BASE_URL` | `https://api.openai.com/v1` |
-| `EMBEDDING_API_KEY` | required unless provider is `fake` |
-| `EMBEDDING_MODEL` | `text-embedding-3-small` (768-d vectors) |
+| `EMBEDDING_BASE_URL` | `http://localhost:11434/v1` (Ollama in Compose); or any OpenAI-compatible base |
+| `EMBEDDING_API_KEY` | required unless provider is `fake` — use `ollama` for local Ollama (ignored by server) |
+| `EMBEDDING_MODEL` | `embeddinggemma` (768-d) when using Compose Ollama |
 | `REQUIRE_TEAMS` | `false` — `start:teams` forces `true` |
 | `TEAMS_WEBHOOK_SECRET` | HMAC secret for inbound webhooks (quote if it contains `=`) |
 | `TEAMS_REPLY_FLOW_URL` | Power Automate HTTP URL for Adaptive Card replies (Teams App path) |
@@ -83,6 +105,8 @@ export TEST_DATABASE_URL=postgres://review:review@localhost:5433/review_test
 | `GITHUB_TOKEN` | resolves PR head/base via GitHub API (required for Teams path) |
 | `MAX_CONCURRENT_REVIEWS` | `2` |
 | `REVIEW_RETRY_MAX` | `2` |
+| `NGROK_AUTHTOKEN` | required only for `docker compose --profile tunnel` |
+| `NGROK_DOMAIN` | reserved hostname (default `primarily-live-stag.ngrok-free.app`) |
 
 ## Test & smoke
 
