@@ -16,7 +16,13 @@ const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 
 export function parseRepoId(argv: string[]): string {
   const index = argv.indexOf("--repo-id");
-  const value = index >= 0 ? argv[index + 1] : undefined;
+  // Positional fallback: PowerShell's npm.ps1 strips a bare `--`, so npm
+  // swallows `--repo-id` and only the bare id reaches the script.
+  const value =
+    index >= 0
+      ? argv[index + 1]
+      : argv.find((arg) => arg.startsWith("--repo-id="))?.slice("--repo-id=".length) ??
+        argv.find((arg) => !arg.startsWith("-"));
   if (!value || value.startsWith("--")) {
     throw new Error("Usage: index-baseline --repo-id <id>");
   }

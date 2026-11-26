@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start:teams": "REQUIRE_TEAMS=true tsx --env-file=../../.env src/main.ts",
+    "start:teams": "tsx --env-file=../../.env src/main.ts",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "build": "tsc -p tsconfig.json"
