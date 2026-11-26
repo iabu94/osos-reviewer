@@ -43,9 +43,9 @@ fi
 
 echo "==> Running code-intel, git-manager, and orchestrator tests against $TEST_DATABASE_URL"
 # Tests create the test database on demand and never touch DATABASE_URL.
-npm run test -w @review/code-intel
-npm run test -w @review/git-manager
-npm run test -w @review/orchestrator
+npm run test -w @osos-reviewer/code-intel
+npm run test -w @osos-reviewer/git-manager
+npm run test -w @osos-reviewer/orchestrator
 
 echo "==> Baseline-indexing fixture trees into the test database (fake embeddings)"
 TMP="$(mktemp -d)"
@@ -67,7 +67,7 @@ make_repo "$TMP/fe" "$ROOT/packages/code-intel/fixtures/angular"
 export REPOS_JSON="[{\"id\":\"be\",\"role\":\"backend\",\"localPath\":\"$TMP/be\",\"defaultBaseBranch\":\"develop\",\"githubRepo\":\"acme/backend\"},{\"id\":\"fe\",\"role\":\"frontend\",\"localPath\":\"$TMP/fe\",\"defaultBaseBranch\":\"develop\",\"githubRepo\":\"acme/frontend\"}]"
 export WORKTREE_ROOT="$TMP/worktrees"
 for repo in be fe; do
-  DATABASE_URL="$TEST_DATABASE_URL" npm run index-baseline -w @review/code-intel --repo-id "$repo"
+  DATABASE_URL="$TEST_DATABASE_URL" npm run index-baseline -w @osos-reviewer/code-intel --repo-id "$repo"
 done
 
 echo "==> Verifying baseline symbols are indexed"

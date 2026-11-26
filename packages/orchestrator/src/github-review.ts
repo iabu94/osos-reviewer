@@ -1,4 +1,4 @@
-import type { ReviewResult } from "@review/shared";
+import type { ReviewResult } from "@osos-reviewer/shared";
 import { fetchGithubPullDetails } from "./github-pr.js";
 import {
   buildGithubReviewPayload,

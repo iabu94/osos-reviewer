@@ -1,4 +1,4 @@
-import type { CodeSymbolRecord } from "@review/shared";
+import type { CodeSymbolRecord } from "@osos-reviewer/shared";
 import { describe, expect, it } from "vitest";
 import { mergePreferPr } from "../src/merge-scope.js";
 

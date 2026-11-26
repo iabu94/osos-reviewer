@@ -1,4 +1,4 @@
-import type { ReviewMetadata, ReviewRequest } from "@review/shared";
+import type { ReviewMetadata, ReviewRequest } from "@osos-reviewer/shared";
 
 export function buildReviewPrompt(input: {
   request: ReviewRequest;

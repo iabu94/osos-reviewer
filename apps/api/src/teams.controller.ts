@@ -13,7 +13,7 @@ import {
   handleTeamsHttpRequest,
   type TeamsWebhookLogger,
   type TeamsWebhookWorker,
-} from "@review/teams";
+} from "@osos-reviewer/teams";
 import {
   TEAMS_WEBHOOK_LOGGER,
   TEAMS_WEBHOOK_SECRET,

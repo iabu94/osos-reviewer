@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { Test } from "@nestjs/testing";
 import type { INestApplication } from "@nestjs/common";
-import type { TeamsWebhookWorker } from "@review/teams";
+import type { TeamsWebhookWorker } from "@osos-reviewer/teams";
 import { TeamsController } from "../src/teams.controller.js";
 import {
   TEAMS_WEBHOOK_LOGGER,

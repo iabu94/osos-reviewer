@@ -1,4 +1,4 @@
-import type { CodeSymbolRecord } from "@review/shared";
+import type { CodeSymbolRecord } from "@osos-reviewer/shared";
 
 function symbolKey(row: CodeSymbolRecord): string {
   return `${row.repo}\0${row.filePath}\0${row.symbolName}`;

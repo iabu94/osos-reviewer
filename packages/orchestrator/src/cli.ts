@@ -3,7 +3,7 @@ import { pathToFileURL } from "node:url";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { execa } from "execa";
-import { loadConfig } from "@review/shared";
+import { loadConfig } from "@osos-reviewer/shared";
 import { runReview } from "./review.js";
 
 function usage(): never {

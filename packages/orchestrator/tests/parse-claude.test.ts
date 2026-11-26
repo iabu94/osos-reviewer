@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
-import { NO_FINDINGS_SUMMARY } from "@review/shared";
+import { NO_FINDINGS_SUMMARY } from "@osos-reviewer/shared";
 import { parseClaudeReviewOutput } from "../src/parse-claude.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

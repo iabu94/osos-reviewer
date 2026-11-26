@@ -2,9 +2,9 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { listChangedFiles as gitListChangedFiles } from "@review/git-manager";
-import type { EmbeddingProvider } from "@review/knowledge";
-import type { RepoRole } from "@review/shared";
+import { listChangedFiles as gitListChangedFiles } from "@osos-reviewer/git-manager";
+import type { EmbeddingProvider } from "@osos-reviewer/knowledge";
+import type { RepoRole } from "@osos-reviewer/shared";
 import type { Pool } from "pg";
 
 import { isDiscoverableSourcePath } from "./discover.js";

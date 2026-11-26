@@ -5,12 +5,12 @@ import {
   ensureDatabase,
   migrate,
   resolveTestDatabaseUrl,
-} from "@review/db";
+} from "@osos-reviewer/db";
 import {
   FakeEmbeddingProvider,
   ingestKnowledgeBase,
   type EmbeddingProvider,
-} from "@review/knowledge";
+} from "@osos-reviewer/knowledge";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { Pool } from "pg";

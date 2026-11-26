@@ -1,5 +1,5 @@
-import { traceSymbolImpact } from "@review/code-intel";
-import type { ImpactedSymbol } from "@review/shared";
+import { traceSymbolImpact } from "@osos-reviewer/code-intel";
+import type { ImpactedSymbol } from "@osos-reviewer/shared";
 import type { Pool } from "pg";
 import { z } from "zod";
 

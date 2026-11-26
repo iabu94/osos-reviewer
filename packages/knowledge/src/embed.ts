@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import type { EmbeddingConfig } from "@review/shared";
+import type { EmbeddingConfig } from "@osos-reviewer/shared";
 
 const EMBEDDING_DIMENSIONS = 768 as const;
 

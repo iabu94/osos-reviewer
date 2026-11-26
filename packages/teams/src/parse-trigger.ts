@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { TeamsConversationRef } from "@review/shared";
+import type { TeamsConversationRef } from "@osos-reviewer/shared";
 
 /**
  * Matches `@ReviewBot`, Teams `<at>ReviewBot</at>`, or any `<at>…</at>`.

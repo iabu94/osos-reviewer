@@ -20,8 +20,8 @@ done
 echo "==> Running unit tests"
 npm test
 
-echo "==> DB health via @review/db tests"
-npm run test -w @review/db -- client.test.ts
+echo "==> DB health via @osos-reviewer/db tests"
+npm run test -w @osos-reviewer/db -- client.test.ts
 
 if command -v claude >/dev/null 2>&1; then
   echo "==> claude CLI found (real headless invoke is optional; skipped in smoke)"

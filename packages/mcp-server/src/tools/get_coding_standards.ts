@@ -1,6 +1,6 @@
-import type { EmbeddingProvider } from "@review/knowledge";
-import { retrieveCodingStandards } from "@review/knowledge";
-import type { CodingStandardRule } from "@review/shared";
+import type { EmbeddingProvider } from "@osos-reviewer/knowledge";
+import { retrieveCodingStandards } from "@osos-reviewer/knowledge";
+import type { CodingStandardRule } from "@osos-reviewer/shared";
 import type { Pool } from "pg";
 import { z } from "zod";
 

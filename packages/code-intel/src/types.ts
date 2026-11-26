@@ -1,4 +1,4 @@
-import type { RelationshipType, SymbolType } from "@review/shared";
+import type { RelationshipType, SymbolType } from "@osos-reviewer/shared";
 
 export interface ParsedSymbol {
   symbolType: SymbolType;

@@ -4,7 +4,7 @@ import type {
   IndexScope,
   RelationshipType,
   SymbolType,
-} from "@review/shared";
+} from "@osos-reviewer/shared";
 import type { Pool } from "pg";
 
 const DEFAULT_LIMIT = 50;

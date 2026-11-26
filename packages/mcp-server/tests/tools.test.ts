@@ -10,7 +10,7 @@ import {
   createEnvStandardsDeps,
   handleToolRouted,
 } from "../src/tools/router.js";
-import { FakeEmbeddingProvider } from "@review/knowledge";
+import { FakeEmbeddingProvider } from "@osos-reviewer/knowledge";
 
 describe("MCP router", () => {
   const brokenOptions = {

@@ -64,7 +64,7 @@ Unknown top-level folders are **skipped** — never invent categories.
 2. Reply with the ingest command — **do not run it** unless explicitly asked:
 
 ```bash
-npm run ingest -w @review/knowledge
+npm run ingest -w @osos-reviewer/knowledge
 ```
 
 "I'll run whatever you tell me" → give the command, do not execute it. Never end "done" without this command.

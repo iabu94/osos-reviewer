@@ -1,4 +1,4 @@
-import type { ReviewResult } from "@review/shared";
+import type { ReviewResult } from "@osos-reviewer/shared";
 
 export const CARD_SCHEMA = "http://adaptivecards.io/schemas/adaptive-card.json";
 export const CARD_TYPE = "AdaptiveCard";

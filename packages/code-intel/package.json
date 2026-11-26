@@ -1,5 +1,5 @@
 {
-  "name": "@review/code-intel",
+  "name": "@osos-reviewer/code-intel",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -19,10 +19,11 @@
     "index-baseline": "tsx src/cli.ts"
   },
   "dependencies": {
-    "@review/db": "*",
-    "@review/git-manager": "*",
-    "@review/knowledge": "*",
-    "@review/shared": "*",
+    "@osos-reviewer/db": "*",
+    "@osos-reviewer/git-manager": "*",
+    "@osos-reviewer/knowledge": "*",
+    "@osos-reviewer/shared": "*",
+    "dotenv": "^18.0.10",
     "pg": "^8.13.1",
     "tree-sitter": "0.21.1",
     "tree-sitter-c-sharp": "0.23.1",

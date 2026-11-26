@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { extractTicketId, resolveCompanionBranch } from "../src/companion.js";
-import { TicketUnresolvedError } from "@review/shared";
+import { TicketUnresolvedError } from "@osos-reviewer/shared";
 
 describe("extractTicketId", () => {
   it("extracts Centroniz-style tickets from branch names", () => {

@@ -1,6 +1,6 @@
 import Parser from "tree-sitter";
 import CSharp from "tree-sitter-c-sharp";
-import type { SymbolType } from "@review/shared";
+import type { SymbolType } from "@osos-reviewer/shared";
 import type { ParseFileResult, ParsedRelationship, ParsedSymbol } from "./types.js";
 
 type Node = Parser.SyntaxNode;

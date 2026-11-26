@@ -1,4 +1,4 @@
-import type { EmbeddingProvider } from "@review/knowledge";
+import type { EmbeddingProvider } from "@osos-reviewer/knowledge";
 
 import type { ParsedSymbol } from "./types.js";
 

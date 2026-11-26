@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import type { EmbeddingProvider } from "@review/knowledge";
-import type { RepoConfig } from "@review/shared";
+import type { EmbeddingProvider } from "@osos-reviewer/knowledge";
+import type { RepoConfig } from "@osos-reviewer/shared";
 import type { Pool } from "pg";
 
 import { discoverSourceFiles } from "./discover.js";

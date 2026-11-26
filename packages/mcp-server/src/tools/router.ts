@@ -1,7 +1,7 @@
-import { createPool, migrate } from "@review/db";
-import { createEmbeddingProvider } from "@review/knowledge";
-import { loadConfig } from "@review/shared";
-import type { EmbeddingProvider } from "@review/knowledge";
+import { createPool, migrate } from "@osos-reviewer/db";
+import { createEmbeddingProvider } from "@osos-reviewer/knowledge";
+import { loadConfig } from "@osos-reviewer/shared";
+import type { EmbeddingProvider } from "@osos-reviewer/knowledge";
 import type { Pool } from "pg";
 
 import {

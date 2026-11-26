@@ -3,14 +3,14 @@ import { mkdir } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execa } from "execa";
-import { createPool, migrate, type Pool } from "@review/db";
-import { loadConfig, type AppConfig } from "@review/shared";
+import { createPool, migrate, type Pool } from "@osos-reviewer/db";
+import { loadConfig, type AppConfig } from "@osos-reviewer/shared";
 import {
   createHttpTeamsMessenger,
   createPowerAutomateTeamsMessenger,
   type TeamsMessenger,
   type TeamsWebhookWorker,
-} from "@review/teams";
+} from "@osos-reviewer/teams";
 import { createLogger } from "./log.js";
 import { resolvePrBranchesViaGithub } from "./github-pr.js";
 import { createGithubReviewPoster } from "./github-review.js";

@@ -1,5 +1,5 @@
 {
-  "name": "@review/orchestrator",
+  "name": "@osos-reviewer/orchestrator",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -20,13 +20,13 @@
     "start:teams": "REQUIRE_TEAMS=true tsx --env-file=../../.env src/teams-cli.ts"
   },
   "dependencies": {
-    "@review/code-intel": "*",
-    "@review/knowledge": "*",
-    "@review/db": "*",
-    "@review/git-manager": "*",
-    "@review/mcp-server": "*",
-    "@review/shared": "*",
-    "@review/teams": "*",
+    "@osos-reviewer/code-intel": "*",
+    "@osos-reviewer/knowledge": "*",
+    "@osos-reviewer/db": "*",
+    "@osos-reviewer/git-manager": "*",
+    "@osos-reviewer/mcp-server": "*",
+    "@osos-reviewer/shared": "*",
+    "@osos-reviewer/teams": "*",
     "execa": "^9.5.2",
     "zod": "^3.24.1"
   },

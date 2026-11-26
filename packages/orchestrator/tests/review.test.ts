@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createFixtureRepo } from "../../git-manager/tests/fixture-repo.js";
-import { loadConfig, NO_FINDINGS_SUMMARY, type AppConfig } from "@review/shared";
+import { loadConfig, NO_FINDINGS_SUMMARY, type AppConfig } from "@osos-reviewer/shared";
 import { runReview, parsePrUrl } from "../src/review.js";
 import type { ReviewDeps } from "../src/review.js";
 

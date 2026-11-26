@@ -1,5 +1,5 @@
-import { traceFeBeIntegration } from "@review/code-intel";
-import type { IntegrationMismatch, SymbolEvidence } from "@review/shared";
+import { traceFeBeIntegration } from "@osos-reviewer/code-intel";
+import type { IntegrationMismatch, SymbolEvidence } from "@osos-reviewer/shared";
 import type { Pool } from "pg";
 import { z } from "zod";
 

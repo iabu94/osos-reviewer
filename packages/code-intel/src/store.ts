@@ -1,4 +1,4 @@
-import type { IndexScope } from "@review/shared";
+import type { IndexScope } from "@osos-reviewer/shared";
 import type { Pool } from "pg";
 
 import type { ParsedRelationship, ParsedSymbol } from "./types.js";

@@ -3,8 +3,8 @@ import {
   ensureDatabase,
   migrate,
   resolveTestDatabaseUrl,
-} from "@review/db";
-import { FakeEmbeddingProvider } from "@review/knowledge";
+} from "@osos-reviewer/db";
+import { FakeEmbeddingProvider } from "@osos-reviewer/knowledge";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {

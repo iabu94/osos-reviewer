@@ -1,4 +1,4 @@
-import type { ReviewFinding, ReviewReport } from "@review/shared";
+import type { ReviewFinding, ReviewReport } from "@osos-reviewer/shared";
 import { z } from "zod";
 
 const findingCategoryEnum = z.enum([

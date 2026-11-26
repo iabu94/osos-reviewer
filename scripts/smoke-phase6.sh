@@ -30,12 +30,12 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 
-echo "==> Package tests (@review/api, teams, orchestrator, db, shared)"
-npm run test -w @review/api
-npm run test -w @review/teams
-npm run test -w @review/orchestrator
-npm run test -w @review/db
-npm run test -w @review/shared
+echo "==> Package tests (@osos-reviewer/api, teams, orchestrator, db, shared)"
+npm run test -w @osos-reviewer/api
+npm run test -w @osos-reviewer/teams
+npm run test -w @osos-reviewer/orchestrator
+npm run test -w @osos-reviewer/db
+npm run test -w @osos-reviewer/shared
 
 echo "==> Ephemeral signed webhook POST"
 TSX="$ROOT/node_modules/.bin/tsx"

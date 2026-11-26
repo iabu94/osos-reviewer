@@ -1,4 +1,4 @@
-import { TicketUnresolvedError } from "@review/shared";
+import { TicketUnresolvedError } from "@osos-reviewer/shared";
 
 export function extractTicketId(
   text: string,

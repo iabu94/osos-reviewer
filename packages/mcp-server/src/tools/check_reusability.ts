@@ -1,6 +1,6 @@
-import { findSimilarSymbols } from "@review/code-intel";
-import type { EmbeddingProvider } from "@review/knowledge";
-import type { ReusabilityCandidate } from "@review/shared";
+import { findSimilarSymbols } from "@osos-reviewer/code-intel";
+import type { EmbeddingProvider } from "@osos-reviewer/knowledge";
+import type { ReusabilityCandidate } from "@osos-reviewer/shared";
 import type { Pool } from "pg";
 import { z } from "zod";
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { NO_FINDINGS_SUMMARY } from "@review/shared";
+import { NO_FINDINGS_SUMMARY } from "@osos-reviewer/shared";
 import { parseReviewReport, REVIEW_OUTPUT_JSON_SCHEMA } from "../src/review-schema.js";
 
 describe("review-schema", () => {

@@ -1,12 +1,14 @@
 #!/usr/bin/env tsx
+import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { createPool, migrate } from "@review/db";
-import { loadConfig } from "@review/shared";
+import { createPool, migrate } from "@osos-reviewer/db";
+import { loadConfig } from "@osos-reviewer/shared";
+import { config as loadDotenv } from "dotenv";
 
 import { createEmbeddingProvider } from "./embed.js";
 import { ingestKnowledgeBase, type IngestReport } from "./ingest.js";
-import { resolveKnowledgeBasePath } from "./paths.js";
+import { REPO_ROOT, resolveKnowledgeBasePath } from "./paths.js";
 
 /** Ingest only needs the database and embedding settings; default the rest. */
 export function withIngestDefaults(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
@@ -41,6 +43,7 @@ export async function runIngest(
 const entry = process.argv[1] ? pathToFileURL(process.argv[1]).href : undefined;
 
 if (entry && import.meta.url === entry) {
+  loadDotenv({ path: resolve(REPO_ROOT, ".env") });
   runIngest(process.env, {
     allowEmpty: process.argv.slice(2).includes("--force-empty"),
   })

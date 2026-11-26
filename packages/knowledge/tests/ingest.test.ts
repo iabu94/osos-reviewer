@@ -7,7 +7,7 @@ import {
   ensureDatabase,
   migrate,
   resolveTestDatabaseUrl,
-} from "@review/db";
+} from "@osos-reviewer/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {

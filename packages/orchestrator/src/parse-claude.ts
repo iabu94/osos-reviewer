@@ -2,7 +2,7 @@ import {
   NO_FINDINGS_SUMMARY,
   type ReviewDiagnostics,
   type ReviewReport,
-} from "@review/shared";
+} from "@osos-reviewer/shared";
 import { ZodError } from "zod";
 import { parseReviewReport } from "./review-schema.js";
 

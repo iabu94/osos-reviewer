@@ -6,9 +6,9 @@ import {
   ensureDatabase,
   migrate,
   resolveTestDatabaseUrl,
-} from "@review/db";
-import { FakeEmbeddingProvider } from "@review/knowledge";
-import type { RepoConfig } from "@review/shared";
+} from "@osos-reviewer/db";
+import { FakeEmbeddingProvider } from "@osos-reviewer/knowledge";
+import type { RepoConfig } from "@osos-reviewer/shared";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {

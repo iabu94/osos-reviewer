@@ -1,4 +1,4 @@
-import type { TeamsConversationRef } from "@review/shared";
+import type { TeamsConversationRef } from "@osos-reviewer/shared";
 
 export type TeamsMessenger = {
   reply(

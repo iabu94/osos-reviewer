@@ -6,8 +6,8 @@ cd "$ROOT"
 
 export EMBEDDING_PROVIDER="${EMBEDDING_PROVIDER:-fake}"
 
-echo "==> Running @review/orchestrator tests (fake Claude only)"
-npm run test -w @review/orchestrator
+echo "==> Running @osos-reviewer/orchestrator tests (fake Claude only)"
+npm run test -w @osos-reviewer/orchestrator
 
 if command -v claude >/dev/null 2>&1; then
   echo "==> Skipping live claude invoke (billing); binary present: $(command -v claude)"

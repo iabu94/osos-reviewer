@@ -4,7 +4,7 @@ import { extname, parse, relative, resolve, sep } from "node:path";
 import type {
   DocumentCategory,
   DocumentTechnology,
-} from "@review/shared";
+} from "@osos-reviewer/shared";
 
 const categories = new Set<DocumentCategory>([
   "coding-standards",

@@ -7,17 +7,17 @@ import {
   type ReviewMetadata,
   type ReviewRequest,
   type ReviewResult,
-} from "@review/shared";
+} from "@osos-reviewer/shared";
 import {
   createWorktree,
   extractTicketId,
   focusedDiff,
   removeWorktree,
   resolveCompanionBranch,
-} from "@review/git-manager";
-import { createPool, healthCheck, migrate } from "@review/db";
-import { cleanupPrIndex, indexPrDelta } from "@review/code-intel";
-import { createEmbeddingProvider } from "@review/knowledge";
+} from "@osos-reviewer/git-manager";
+import { createPool, healthCheck, migrate } from "@osos-reviewer/db";
+import { cleanupPrIndex, indexPrDelta } from "@osos-reviewer/code-intel";
+import { createEmbeddingProvider } from "@osos-reviewer/knowledge";
 import { runClaudeReview } from "./claude.js";
 import type { ReviewLogger } from "./log.js";
 import { parseClaudeReviewOutput } from "./parse-claude.js";

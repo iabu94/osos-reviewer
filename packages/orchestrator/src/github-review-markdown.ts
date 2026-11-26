@@ -2,7 +2,7 @@ import {
   NO_FINDINGS_SUMMARY,
   type ReviewFinding,
   type ReviewResult,
-} from "@review/shared";
+} from "@osos-reviewer/shared";
 import type { GithubPullDetails } from "./github-pr.js";
 
 export const GITHUB_REVIEW_MARKER_PREFIX =

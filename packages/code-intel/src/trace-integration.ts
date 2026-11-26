@@ -4,7 +4,7 @@ import type {
   IntegrationMismatch,
   SymbolEvidence,
   SymbolType,
-} from "@review/shared";
+} from "@osos-reviewer/shared";
 import type { Pool } from "pg";
 
 import { mergePreferPr } from "./merge-scope.js";

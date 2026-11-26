@@ -1,7 +1,7 @@
 import { readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
-import type { RepoRole } from "@review/shared";
+import type { RepoRole } from "@osos-reviewer/shared";
 
 const ALWAYS_SKIPPED_DIRS = new Set([".git"]);
 const SKIPPED_DIRS: Record<RepoRole, Set<string>> = {

@@ -4,12 +4,12 @@ import {
   createPool,
   markReviewFinished,
   markReviewRunning,
-} from "@review/db";
+} from "@osos-reviewer/db";
 
 type ReviewDbPool = ReturnType<typeof createPool>;
-import { buildReviewAdaptiveCard } from "@review/teams";
-import type { AppConfig, ReviewResult, TeamsConversationRef } from "@review/shared";
-import type { TeamsMessenger } from "@review/teams";
+import { buildReviewAdaptiveCard } from "@osos-reviewer/teams";
+import type { AppConfig, ReviewResult, TeamsConversationRef } from "@osos-reviewer/shared";
+import type { TeamsMessenger } from "@osos-reviewer/teams";
 import { fetchGithubPullDetails } from "./github-pr.js";
 import type {
   GithubReviewPoster,

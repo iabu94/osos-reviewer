@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NO_FINDINGS_SUMMARY, type ReviewFinding } from "@review/shared";
+import { NO_FINDINGS_SUMMARY, type ReviewFinding } from "@osos-reviewer/shared";
 import {
   buildGithubReviewPayload,
   reviewIdMarker,

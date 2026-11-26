@@ -2,7 +2,7 @@ import type {
   ReviewLifecycleStatus,
   ReviewResult,
   TeamsConversationRef,
-} from "@review/shared";
+} from "@osos-reviewer/shared";
 import type { Pool } from "pg";
 
 export interface ReviewRow {

@@ -1,4 +1,4 @@
-# Cursor Review Platform
+# OSOS Reviewer
 
 Teams-triggered, token-efficient cross-repository code review orchestrator (Centroniz). A Microsoft Teams mention with a GitHub PR URL runs a focused review across backend (.NET) and frontend (Angular) repos via Claude Code, MCP tools, Postgres/pgvector indexes, and Adaptive Card replies.
 
@@ -10,28 +10,28 @@ Phases 1–6 are implemented: foundation, document RAG, code intelligence, MCP r
 Microsoft Teams (ReviewBot mention + PR URL)
       |
       v
-Nest HTTP host (@review/api)  --HMAC-->  202 accepted
-      |  (handlers from @review/teams)
+Nest HTTP host (@osos-reviewer/api)  --HMAC-->  202 accepted
+      |  (handlers from @osos-reviewer/teams)
       v
-Review worker (@review/orchestrator)
+Review worker (@osos-reviewer/orchestrator)
       |
       +-- resolve PR branches (GitHub API)
-      +-- Git worktrees + focused diff (@review/git-manager)
-      +-- PR delta code index (@review/code-intel)
+      +-- Git worktrees + focused diff (@osos-reviewer/git-manager)
+      +-- PR delta code index (@osos-reviewer/code-intel)
       +-- Claude Code headless (claude -p, structured JSON)
       |         |
       |         v
-      |   MCP tools (@review/mcp-server)
+      |   MCP tools (@osos-reviewer/mcp-server)
       |     trace_fe_be_integration
       |     trace_symbol_impact
       |     check_reusability
-      |     get_coding_standards  <-- knowledge RAG (@review/knowledge)
+      |     get_coding_standards  <-- knowledge RAG (@osos-reviewer/knowledge)
       |
       +-- Adaptive Card reply to Teams thread
-      +-- PostgreSQL + pgvector (@review/db)
+      +-- PostgreSQL + pgvector (@osos-reviewer/db)
 ```
 
-Local CLI reviews skip Teams and call the same `runReview` path directly. `npm start` boots the Nest Teams app (`@review/api`).
+Local CLI reviews skip Teams and call the same `runReview` path directly. `npm start` boots the Nest Teams app (`@osos-reviewer/api`).
 
 ## Prerequisites
 
@@ -55,7 +55,7 @@ claude auth login                     # once, Claude Pro on this machine
 npm start                             # Nest Teams app on :3080
 ```
 
-The Nest Teams app and orchestrator CLI load `.env` via `tsx --env-file=../../.env`.
+The Nest Teams app and orchestrator CLI load `.env` via `tsx --env-file=../../.env`. Knowledge ingest and code-intel `index-baseline` load the repo-root `.env` via `dotenv`.
 
 | Service | Host port | Notes |
 |---------|-----------|--------|
@@ -126,7 +126,7 @@ npm run bench:phase6   # worker timing with fake runReview → bench-phase6-out.
 Configure `REPOS_JSON` with local clones and `githubRepo` values matching the PR host/owner/repo. For CLI-only runs without GitHub API, pass branches explicitly:
 
 ```bash
-npm run start -w @review/orchestrator -- \
+npm run start -w @osos-reviewer/orchestrator -- \
   --pr-url https://github.com/acme/backend/pull/1 \
   --primary-branch feature/ABC-123 \
   --target-branch develop
@@ -150,7 +150,7 @@ knowledge-base/
 Category comes from the top-level folder and technology from the sub-folder.
 
 ```bash
-npm run ingest -w @review/knowledge
+npm run ingest -w @osos-reviewer/knowledge
 ```
 
 - Unchanged documents are skipped only when both file content and embedding model match; changing `EMBEDDING_PROVIDER`/`EMBEDDING_MODEL` re-embeds everything.
@@ -159,7 +159,7 @@ npm run ingest -w @review/knowledge
 
 ## Code intelligence
 
-`@review/code-intel` indexes symbols and relationships into Postgres (`code_symbols` plus relationship rows, pgvector embeddings).
+`@osos-reviewer/code-intel` indexes symbols and relationships into Postgres (`code_symbols` plus relationship rows, pgvector embeddings).
 
 **Parsers**
 
@@ -169,8 +169,8 @@ npm run ingest -w @review/knowledge
 **Baseline index** (default branch; `index_scope = 'baseline'`):
 
 ```bash
-npm run index-baseline -w @review/code-intel -- --repo-id be
-npm run index-baseline -w @review/code-intel -- --repo-id fe
+npm run index-baseline -w @osos-reviewer/code-intel -- --repo-id be
+npm run index-baseline -w @osos-reviewer/code-intel -- --repo-id fe
 ```
 
 Unchanged files (by content hash) are skipped; stale symbols are replaced; deleted files are removed. An indexing error during review fails with `error.code = "index_failed"`.
@@ -214,7 +214,7 @@ Teams messages that mention **ReviewBot** and include a GitHub pull request URL 
 
 ```bash
 npm start
-# or: npm run start:teams -w @review/api
+# or: npm run start:teams -w @osos-reviewer/api
 ```
 
 | Route | Response |
@@ -240,15 +240,15 @@ When `GITHUB_TOKEN` is set and `GITHUB_REVIEW_DELIVERY` is not `false`, the Team
 
 | Package | Role |
 |---------|------|
-| `@review/shared` | Config + shared types/errors |
-| `@review/db` | Postgres pool, migrate, health, reviews lifecycle |
-| `@review/git-manager` | Ticket/companion, worktrees, focused diff |
-| `@review/code-intel` | Symbol parsing, baseline + PR delta indexing, retrieval |
-| `@review/knowledge` | Knowledge-base discovery, chunking, embeddings, ingest, retrieval |
-| `@review/mcp-server` | MCP tools over stdio |
-| `@review/orchestrator` | Review lifecycle, CLI review, Teams runtime/worker |
-| `@review/teams` | Webhook handler, Adaptive Cards, Bot Connector client |
-| `@review/api` | NestJS HTTP host for Teams webhook (`npm start`) |
+| `@osos-reviewer/shared` | Config + shared types/errors |
+| `@osos-reviewer/db` | Postgres pool, migrate, health, reviews lifecycle |
+| `@osos-reviewer/git-manager` | Ticket/companion, worktrees, focused diff |
+| `@osos-reviewer/code-intel` | Symbol parsing, baseline + PR delta indexing, retrieval |
+| `@osos-reviewer/knowledge` | Knowledge-base discovery, chunking, embeddings, ingest, retrieval |
+| `@osos-reviewer/mcp-server` | MCP tools over stdio |
+| `@osos-reviewer/orchestrator` | Review lifecycle, CLI review, Teams runtime/worker |
+| `@osos-reviewer/teams` | Webhook handler, Adaptive Cards, Bot Connector client |
+| `@osos-reviewer/api` | NestJS HTTP host for Teams webhook (`npm start`) |
 
 ## Spec & plans
 

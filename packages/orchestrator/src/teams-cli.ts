@@ -1,6 +1,6 @@
 import { pathToFileURL } from "node:url";
 import type { Server } from "node:http";
-import { createTeamsWebhookServer } from "@review/teams";
+import { createTeamsWebhookServer } from "@osos-reviewer/teams";
 import { createTeamsRuntime } from "./teams-runtime.js";
 
 export async function startTeamsWebhookCli(

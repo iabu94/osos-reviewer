@@ -2,7 +2,7 @@ import "reflect-metadata";
 import { Module } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
-import { createTeamsRuntime } from "@review/orchestrator";
+import { createTeamsRuntime } from "@osos-reviewer/orchestrator";
 import { RuntimeShutdownService } from "./runtime-shutdown.service.js";
 import { TeamsController } from "./teams.controller.js";
 import {

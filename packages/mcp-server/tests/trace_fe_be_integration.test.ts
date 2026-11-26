@@ -1,15 +1,15 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { indexBaseline } from "@review/code-intel";
+import { indexBaseline } from "@osos-reviewer/code-intel";
 import {
   createPool,
   ensureDatabase,
   migrate,
   resolveTestDatabaseUrl,
-} from "@review/db";
-import { FakeEmbeddingProvider } from "@review/knowledge";
-import type { RepoConfig } from "@review/shared";
+} from "@osos-reviewer/db";
+import { FakeEmbeddingProvider } from "@osos-reviewer/knowledge";
+import type { RepoConfig } from "@osos-reviewer/shared";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { handleTraceFeBeIntegration } from "../src/tools/trace_fe_be_integration.js";

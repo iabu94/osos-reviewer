@@ -1,5 +1,5 @@
 {
-  "name": "@review/knowledge",
+  "name": "@osos-reviewer/knowledge",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -19,8 +19,9 @@
     "ingest": "tsx src/cli.ts"
   },
   "dependencies": {
-    "@review/db": "*",
-    "@review/shared": "*",
+    "@osos-reviewer/db": "*",
+    "@osos-reviewer/shared": "*",
+    "dotenv": "^18.0.10",
     "pg": "^8.13.1"
   },
   "devDependencies": {

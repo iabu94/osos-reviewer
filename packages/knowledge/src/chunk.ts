@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import type {
   DocumentCategory,
   DocumentTechnology,
-} from "@review/shared";
+} from "@osos-reviewer/shared";
 
 import type { DiscoveredDocument } from "./discover.js";
 

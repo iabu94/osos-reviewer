@@ -2,7 +2,7 @@ import type {
   CodingStandardRule,
   DocumentCategory,
   DocumentTechnology,
-} from "@review/shared";
+} from "@osos-reviewer/shared";
 import type { Pool } from "pg";
 
 import type { EmbeddingProvider } from "./embed.js";

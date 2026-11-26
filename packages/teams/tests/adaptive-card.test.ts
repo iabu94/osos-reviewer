@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NO_FINDINGS_SUMMARY } from "@review/shared";
+import { NO_FINDINGS_SUMMARY } from "@osos-reviewer/shared";
 import {
   buildReviewAdaptiveCard,
   CARD_CONTENT_TYPE,

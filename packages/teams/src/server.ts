@@ -4,7 +4,7 @@ import {
   type Server,
   type ServerResponse,
 } from "node:http";
-import type { TeamsConversationRef } from "@review/shared";
+import type { TeamsConversationRef } from "@osos-reviewer/shared";
 import { handleTeamsHttpRequest } from "./handle-request.js";
 
 export type TeamsWebhookLogger = {

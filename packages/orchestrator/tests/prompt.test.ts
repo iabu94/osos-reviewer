@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { ReviewMetadata } from "@review/shared";
+import type { ReviewMetadata } from "@osos-reviewer/shared";
 import { buildReviewPrompt } from "../src/prompt.js";
 
 const minimalMetadata: ReviewMetadata = {

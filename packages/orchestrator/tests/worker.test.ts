@@ -9,9 +9,9 @@ import {
   markReviewRunning,
   migrate,
   resolveTestDatabaseUrl,
-} from "@review/db";
-import { NO_FINDINGS_SUMMARY, type AppConfig, type TeamsConversationRef } from "@review/shared";
-import { createFakeTeamsMessenger } from "@review/teams";
+} from "@osos-reviewer/db";
+import { NO_FINDINGS_SUMMARY, type AppConfig, type TeamsConversationRef } from "@osos-reviewer/shared";
+import { createFakeTeamsMessenger } from "@osos-reviewer/teams";
 import type { Pool } from "pg";
 import { GithubDeliveryError } from "../src/github-review.js";
 import type { GithubReviewPoster } from "../src/github-review.js";

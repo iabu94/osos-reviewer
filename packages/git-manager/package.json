@@ -1,5 +1,5 @@
 {
-  "name": "@review/git-manager",
+  "name": "@osos-reviewer/git-manager",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -18,7 +18,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@review/shared": "*",
+    "@osos-reviewer/shared": "*",
     "execa": "^9.5.2"
   },
   "devDependencies": {
