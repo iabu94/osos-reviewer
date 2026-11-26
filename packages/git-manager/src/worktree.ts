@@ -48,9 +48,12 @@ export async function createWorktree(opts: {
 
   const ref = toRemoteRef(opts.branch);
   // Detached checkout avoids local branch ownership collisions across concurrent reviews.
-  await execa("git", ["worktree", "add", "--detach", worktreePath, ref], {
-    cwd: opts.repoPath,
-  });
+  // core.longpaths lets Git for Windows create files whose full path exceeds MAX_PATH (260).
+  await execa(
+    "git",
+    ["-c", "core.longpaths=true", "worktree", "add", "--detach", worktreePath, ref],
+    { cwd: opts.repoPath },
+  );
 
   const { stdout: headSha } = await execa("git", ["rev-parse", "HEAD"], {
     cwd: worktreePath,
@@ -66,7 +69,7 @@ export async function removeWorktree(opts: {
   try {
     await execa(
       "git",
-      ["worktree", "remove", "--force", opts.worktreePath],
+      ["-c", "core.longpaths=true", "worktree", "remove", "--force", opts.worktreePath],
       { cwd: opts.repoPath },
     );
   } catch {
