@@ -71,6 +71,18 @@ docker compose exec db psql -U review -c 'CREATE DATABASE review_test;'
 export TEST_DATABASE_URL=postgres://review:review@localhost:5433/review_test
 ```
 
+### Windows: enable symlinks for Claude Code skills
+
+Project skills under `.claude/skills/` are git symlinks to `.agents/skills/`. With git's Windows default (`core.symlinks=false`) they check out as plain text files, and Claude Code won't list them under `/`. Enable Windows Developer Mode (or run git as admin), then re-checkout:
+
+```powershell
+git config core.symlinks true
+Remove-Item .claude\skills\updating-knowledge-base
+git checkout -- .claude/skills/updating-knowledge-base
+```
+
+Restart the Claude Code session afterwards. Repeat for any other skill under `.claude/skills/`.
+
 Smoke embeddings against Ollama:
 
 ```bash
